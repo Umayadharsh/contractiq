@@ -8,7 +8,11 @@ import contractRoutes from './routes/contracts.js';
 
 const app = express();
 const port = process.env.PORT || 4000;
-app.use(cors({ origin: process.env.CLIENT_URL?.split(',') || true }));
+const allowedOrigins = (process.env.CLIENT_URL || '')
+  .split(',')
+  .map((origin) => origin.trim().replace(/\/$/, ''))
+  .filter(Boolean);
+app.use(cors({ origin: allowedOrigins.length ? allowedOrigins : true }));
 app.use(express.json());
 app.use('/uploads', express.static(path.resolve('uploads')));
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
