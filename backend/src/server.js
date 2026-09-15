@@ -15,6 +15,7 @@ const allowedOrigins = (process.env.CLIENT_URL || '')
 app.use(cors({ origin: allowedOrigins.length ? allowedOrigins : true }));
 app.use(express.json());
 app.use('/uploads', express.static(path.resolve('uploads')));
+app.get('/', (_req, res) => res.json({ service: 'contractiq-guard-api', status: 'ok' }));
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 app.use('/api/auth', authRoutes);
 app.use('/api/contracts', contractRoutes);
