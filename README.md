@@ -29,13 +29,14 @@ The AI service stores one embedding per extracted clause in the `clause_embeddin
 ```text
 MONGO_URI=<the same MongoDB Atlas URI as the backend>
 MONGO_DB=test
-OPENAI_API_KEY=<key>
-OPENAI_EMBEDDING_MODEL=text-embedding-3-small
+GEMINI_API_KEY=<Google AI Studio key>
+GEMINI_MODEL=gemini-2.5-flash
+GEMINI_EMBEDDING_MODEL=gemini-embedding-2
 CLAUSE_VECTOR_INDEX=clause_vector_index
 CLAUSE_SEARCH_INDEX=clause_search_index
 ```
 
-Create an Atlas Vector Search index named `clause_vector_index` on `clause_embeddings` with this definition (`text-embedding-3-small` produces 1536 dimensions):
+Create an Atlas Vector Search index named `clause_vector_index` on `clause_embeddings` with this definition (`gemini-embedding-2` is configured to produce 1536 dimensions):
 
 ```json
 {

@@ -26,5 +26,5 @@ services:
         sync: false
       - key: MONGO_DB
         value: test
-      - key: OPENAI_API_KEY
+      - key: GEMINI_API_KEY
         sync: false

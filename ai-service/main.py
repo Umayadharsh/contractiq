@@ -5,7 +5,8 @@ from typing import Any
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
-from openai import OpenAI
+from google import genai
+from google.genai import types
 from pymongo import MongoClient
 from pymongo.errors import PyMongoError
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
@@ -182,21 +183,31 @@ def _mongo_collection():
     return client, database[os.getenv("RAG_COLLECTION", "clause_embeddings")]
 
 
-def _embedding_client() -> OpenAI:
-    api_key = os.getenv("OPENAI_API_KEY")
+def _gemini_client() -> genai.Client:
+    api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
-        raise HTTPException(status_code=503, detail="OPENAI_API_KEY is not configured for RAG.")
-    return OpenAI(api_key=api_key)
+        raise HTTPException(status_code=503, detail="GEMINI_API_KEY is not configured for AI operations.")
+    return genai.Client(api_key=api_key)
 
 
 def _create_embeddings(texts: list[str]) -> list[list[float]]:
     if not texts:
         return []
-    response = _embedding_client().embeddings.create(
-        model=os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small"),
-        input=texts,
-    )
-    return [item.embedding for item in sorted(response.data, key=lambda item: item.index)]
+    client = _gemini_client()
+    try:
+        embeddings = []
+        for text in texts:
+            response = client.models.embed_content(
+                model=os.getenv("GEMINI_EMBEDDING_MODEL", "gemini-embedding-2"),
+                contents=text,
+                config=types.EmbedContentConfig(output_dimensionality=1536),
+            )
+            embeddings.append(response.embeddings[0].values)
+        return embeddings
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail="Gemini embedding service is unavailable. Check the API key and quota.") from exc
 
 
 def _chunk_text(clause: ClauseChunk) -> str:
@@ -267,14 +278,19 @@ def _answer_question(question: str, results: list[dict[str, Any]]) -> str:
         f"[Clause {result['clauseId']} | {result['type']}]\n{result['text']}"
         for result in results
     )
-    response = _embedding_client().chat.completions.create(
-        model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
-        messages=[
-            {"role": "system", "content": "Answer contract questions only from the supplied clauses. Cite every material statement with [Clause <id>] using the exact clause ID. If the clauses do not establish an answer, say so clearly. Do not invent terms."},
-            {"role": "user", "content": f"Question: {question}\n\nRetrieved clauses:\n{context}"},
-        ],
-    )
-    return response.choices[0].message.content or "The retrieved clauses did not provide an answer."
+    try:
+        response = _gemini_client().models.generate_content(
+            model=os.getenv("GEMINI_MODEL", "gemini-2.5-flash"),
+            contents=f"Question: {question}\n\nRetrieved clauses:\n{context}",
+            config=types.GenerateContentConfig(
+                system_instruction="Answer contract questions only from the supplied clauses. Cite every material statement with [Clause <id>] using the exact clause ID. If the clauses do not establish an answer, say so clearly. Do not invent terms.",
+            ),
+        )
+        return response.text or "The retrieved clauses did not provide an answer."
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail="Gemini answer service is unavailable. Check the API key and quota.") from exc
 
 
 def _looks_placeholder(value: Any) -> bool:
@@ -367,52 +383,32 @@ def _build_json_schema() -> dict[str, Any]:
 
 
 def _extract_with_llm(raw_text: str, validation_error: str | None = None) -> dict[str, Any]:
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        raise HTTPException(status_code=503, detail={"message": "OPENAI_API_KEY is not configured for contract extraction."})
-
-    client = OpenAI(api_key=api_key)
-    messages = [
-        {
-            "role": "system",
-            "content": (
-                "You are a contract extraction engine. Return only valid JSON matching the schema exactly. "
-                "Do not guess. If a value is not explicitly present in the text, set value to null and confidence to low. "
-                "Every extracted value must include confidence, needsReview, and sourceSpan {start, end, text}. "
-                "sourceSpan.text must be the exact text snippet from the source document. "
-                "Use the tag names: termination, liability, renewal, indemnity, payment, confidentiality, governing_law, other."
-            ),
-        },
-        {
-            "role": "user",
-            "content": (
-                "Extract the following fields from the contract: parties, contractValue, startDate, endDate, governingLaw, paymentTerms, liabilityLimit, clauses. "
-                "Each field must be returned as {value, confidence, sourceSpan, needsReview}. "
-                "confidence must be high, medium, or low. "
-                "For clauses, include type, text, summary, confidence, sourceSpan, needsReview. "
-                "If missing, set value to null and confidence to low. "
-                "The JSON must be strictly valid and match the schema. "
-                + (f"The previous attempt failed validation. Fix this exactly: {validation_error}. " if validation_error else "")
-                + "Do not include commentary.\n\nContract text:\n"
-                + raw_text[:20000]
-            ),
-        },
-    ]
-
-    response = client.chat.completions.create(
-        model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
-        messages=messages,
-        response_format={
-            "type": "json_schema",
-            "json_schema": {
-                "name": "contract_extraction",
-                "schema": _build_json_schema(),
-                "strict": True,
-            },
-        },
+    prompt = (
+        "Extract the following fields from the contract: parties, contractValue, startDate, endDate, governingLaw, paymentTerms, liabilityLimit, clauses. "
+        "Do not guess. If a value is not explicitly present, set value to null and confidence to low. "
+        "Every extracted value must include confidence, needsReview, and sourceSpan {start, end, text}. "
+        "For clauses, use these types when applicable: termination, liability, renewal, indemnity, payment, confidentiality, governing_law, other. "
+        "Return only JSON matching the supplied schema. "
+        + (f"The previous attempt failed validation. Fix this exactly: {validation_error}. " if validation_error else "")
+        + "\n\nContract text:\n"
+        + raw_text[:20000]
     )
 
-    content = response.choices[0].message.content
+    try:
+        response = _gemini_client().models.generate_content(
+            model=os.getenv("GEMINI_MODEL", "gemini-2.5-flash"),
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                response_schema=ContractExtraction,
+            ),
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail={"message": "Gemini extraction service is unavailable. Check the API key and quota."}) from exc
+
+    content = response.text
     if not content:
         raise ValueError("The LLM returned an empty response.")
 
@@ -495,7 +491,6 @@ def extract_contract(payload: ExtractionRequest):
         except ValueError as exc:
             last_error = str(exc)
             continue
-
     raise HTTPException(
         status_code=422,
         detail={
