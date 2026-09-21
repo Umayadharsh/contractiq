@@ -12,3 +12,19 @@ services:
         generateValue: true
       - key: CLIENT_URL
         sync: false
+      - key: AI_SERVICE_URL
+        sync: false
+  - type: web
+    name: contractiq-ai-service
+    runtime: python
+    rootDir: ai-service
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: MONGO_URI
+        sync: false
+      - key: MONGO_DB
+        value: test
+      - key: OPENAI_API_KEY
+        sync: false
