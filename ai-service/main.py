@@ -406,7 +406,15 @@ def _extract_with_llm(raw_text: str, validation_error: str | None = None) -> dic
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=503, detail={"message": "Gemini extraction service is unavailable. Check the API key and quota."}) from exc
+        print(f"Gemini extraction error: {type(exc).__name__}: {exc}")
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "message": "Gemini extraction service is unavailable.",
+                "error_type": type(exc).__name__,
+                "error": str(exc),
+            },
+        ) from exc
 
     content = response.text
     if not content:
