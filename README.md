@@ -30,7 +30,7 @@ The AI service stores one embedding per extracted clause in the `clause_embeddin
 MONGO_URI=<the same MongoDB Atlas URI as the backend>
 MONGO_DB=test
 GEMINI_API_KEY=<Google AI Studio key>
-GEMINI_MODEL=gemini-2.5-flash
+GEMINI_MODEL=gemini-3.6-flash
 GEMINI_EMBEDDING_MODEL=gemini-embedding-2
 CLAUSE_VECTOR_INDEX=clause_vector_index
 CLAUSE_SEARCH_INDEX=clause_search_index

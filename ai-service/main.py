@@ -286,7 +286,7 @@ def _answer_question(question: str, results: list[dict[str, Any]]) -> str:
     )
     try:
         response = _gemini_client().models.generate_content(
-            model=os.getenv("GEMINI_MODEL", "gemini-2.5-flash"),
+            model=os.getenv("GEMINI_MODEL", "gemini-3.6-flash"),
             contents=f"Question: {question}\n\nRetrieved clauses:\n{context}",
             config=types.GenerateContentConfig(
                 system_instruction="Answer contract questions only from the supplied clauses. Cite every material statement with [Clause <id>] using the exact clause ID. If the clauses do not establish an answer, say so clearly. Do not invent terms.",
@@ -417,7 +417,7 @@ def _extract_with_llm(raw_text: str, validation_error: str | None = None) -> dic
 
     try:
         response = _gemini_client().models.generate_content(
-            model=os.getenv("GEMINI_MODEL", "gemini-2.5-flash"),
+            model=os.getenv("GEMINI_MODEL", "gemini-3.6-flash"),
             contents=prompt,
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
