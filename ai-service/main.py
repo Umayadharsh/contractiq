@@ -14,6 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_valida
 load_dotenv()
 
 app = FastAPI(title="ContractIQ AI Service")
+_gemini_client_instance: genai.Client | None = None
 INVALID_PLACEHOLDERS = {
     "n/a",
     "na",
@@ -184,10 +185,15 @@ def _mongo_collection():
 
 
 def _gemini_client() -> genai.Client:
+    global _gemini_client_instance
+    if _gemini_client_instance is not None:
+        return _gemini_client_instance
+
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         raise HTTPException(status_code=503, detail="GEMINI_API_KEY is not configured for AI operations.")
-    return genai.Client(api_key=api_key)
+    _gemini_client_instance = genai.Client(api_key=api_key)
+    return _gemini_client_instance
 
 
 def _create_embeddings(texts: list[str]) -> list[list[float]]:
