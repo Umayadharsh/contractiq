@@ -4,6 +4,8 @@ import re
 import random
 import time
 from typing import Any
+from typing_extensions import TypedDict
+from langgraph.graph import StateGraph, END
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
@@ -546,3 +548,329 @@ def extract_contract(payload: ExtractionRequest):
             "errors": last_error,
         },
     )
+
+
+# --- PLAYBOOK RAG & RISK COMPLIANCE GRAPH ---
+
+class PlaybookRuleChunk(BaseModel):
+    ruleId: str
+    title: str
+    category: str
+    description: str
+    expectedRequirement: str
+    severity: str = "Major"
+    fallbackText: str = ""
+
+
+class IndexPlaybookRequest(BaseModel):
+    workspaceId: str
+    rules: list[PlaybookRuleChunk]
+
+
+class EvaluateComplianceRequest(BaseModel):
+    workspaceId: str
+    clauses: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class RiskAssessment(TypedDict):
+    clauseId: str
+    riskFlag: str
+    severity: str
+    reason: str
+    citedRuleId: str
+    citedClauseText: str
+
+
+class RiskComplianceState(TypedDict):
+    contractId: str
+    workspaceId: str
+    clauses: list[dict[str, Any]]
+    retrievedRules: list[dict[str, Any]]
+    assessments: list[RiskAssessment]
+    overallRiskScore: float
+    overallStatus: str
+    rejectedCount: int
+
+
+def _playbook_collection():
+    uri = os.getenv("MONGO_URI")
+    if not uri:
+        raise HTTPException(status_code=503, detail="MONGO_URI is not configured for Playbook RAG.")
+    client = MongoClient(uri, serverSelectionTimeoutMS=5000)
+    database = client[os.getenv("MONGO_DB", "contractiq")]
+    return client, database[os.getenv("PLAYBOOK_COLLECTION", "playbook_embeddings")]
+
+
+def _search_playbook_rules(workspace_id: str, clauses: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    client, collection = _playbook_collection()
+    try:
+        all_rules = list(collection.find({"workspaceId": workspace_id}))
+        if not all_rules:
+            return []
+
+        clause_texts = [f"{c.get('type', '')} {c.get('summary', '')} {c.get('text', '')}" for c in clauses if c.get('text')]
+        if not clause_texts:
+            return [{
+                "ruleId": r.get("ruleId"),
+                "title": r.get("title"),
+                "category": r.get("category"),
+                "description": r.get("description"),
+                "expectedRequirement": r.get("expectedRequirement"),
+                "severity": r.get("severity", "Major"),
+                "fallbackText": r.get("fallbackText", "")
+            } for r in all_rules]
+
+        try:
+            clause_vectors = _create_embeddings(clause_texts[:5])
+            matched_rule_ids = set()
+            for query_vector in clause_vectors:
+                try:
+                    vector_results = list(collection.aggregate([
+                        {"$vectorSearch": {
+                            "index": os.getenv("PLAYBOOK_VECTOR_INDEX", "playbook_vector_index"),
+                            "path": "embedding",
+                            "queryVector": query_vector,
+                            "numCandidates": 50,
+                            "limit": 10,
+                            "filter": {"workspaceId": workspace_id},
+                        }},
+                        {"$project": {"ruleId": 1}}
+                    ]))
+                    for res in vector_results:
+                        matched_rule_ids.add(res["ruleId"])
+                except PyMongoError:
+                    pass
+
+            if matched_rule_ids:
+                retrieved = [r for r in all_rules if r.get("ruleId") in matched_rule_ids]
+                if retrieved:
+                    return [{
+                        "ruleId": r.get("ruleId"),
+                        "title": r.get("title"),
+                        "category": r.get("category"),
+                        "description": r.get("description"),
+                        "expectedRequirement": r.get("expectedRequirement"),
+                        "severity": r.get("severity", "Major"),
+                        "fallbackText": r.get("fallbackText", "")
+                    } for r in retrieved]
+        except Exception:
+            pass
+
+        return [{
+            "ruleId": r.get("ruleId"),
+            "title": r.get("title"),
+            "category": r.get("category"),
+            "description": r.get("description"),
+            "expectedRequirement": r.get("expectedRequirement"),
+            "severity": r.get("severity", "Major"),
+            "fallbackText": r.get("fallbackText", "")
+        } for r in all_rules]
+    finally:
+        client.close()
+
+
+def retrieve_playbook_rules_node(state: RiskComplianceState) -> dict[str, Any]:
+    workspace_id = state.get("workspaceId", "")
+    clauses = state.get("clauses", [])
+    retrieved_rules = _search_playbook_rules(workspace_id, clauses)
+    return {"retrievedRules": retrieved_rules}
+
+
+def compare_clauses_node(state: RiskComplianceState) -> dict[str, Any]:
+    clauses = state.get("clauses", [])
+    rules = state.get("retrievedRules", [])
+
+    if not clauses or not rules:
+        return {"assessments": [], "rejectedCount": 0}
+
+    valid_rule_map = {r["ruleId"]: r for r in rules if r.get("ruleId")}
+    assessments: list[RiskAssessment] = []
+    rejected_count = 0
+
+    rules_text = "\n".join([
+        f"- [Rule {r['ruleId']}] Category: {r['category']} | Title: {r['title']} | Requirement: {r['expectedRequirement']} | Severity: {r['severity']}"
+        for r in rules
+    ])
+
+    for clause in clauses:
+        clause_id = clause.get("id") or clause.get("_id") or "unknown"
+        clause_text = clause.get("text", "")
+        clause_type = clause.get("type", "")
+
+        if not clause_text:
+            continue
+
+        prompt = (
+            f"Evaluate this contract clause against the provided company playbook rules.\n"
+            f"Clause ID: {clause_id}\nClause Type: {clause_type}\nClause Text: {clause_text}\n\n"
+            f"Playbook Rules:\n{rules_text}\n\n"
+            f"Determine if this clause violates or deviates from any of the playbook rules.\n"
+            f"If it violates a rule, set riskFlag to 'Non-Compliant' or 'Deviation', cite the ruleId (e.g. RULE-LIAB-01), and cite an exact text snippet from the clause.\n"
+            f"If it complies fully, set riskFlag to 'Compliant'.\n"
+            f"Return JSON format: {{\n"
+            f"  \"riskFlag\": \"Non-Compliant\"|\"Deviation\"|\"Compliant\",\n"
+            f"  \"severity\": \"Critical\"|\"Major\"|\"Minor\"|\"Low\",\n"
+            f"  \"reason\": \"explanation\",\n"
+            f"  \"citedRuleId\": \"exact ruleId\",\n"
+            f"  \"citedClauseText\": \"exact snippet from clause text\"\n"
+            f"}}"
+        )
+
+        try:
+            response = _gemini_client().models.generate_content(
+                model=os.getenv("GEMINI_MODEL", "gemini-3.6-flash"),
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    system_instruction="You are a legal compliance auditor. Strictly evaluate clause compliance against playbook rules. Return JSON.",
+                    response_mime_type="application/json"
+                ),
+            )
+            raw_eval = json.loads(response.text or "{}")
+        except Exception:
+            raw_eval = {}
+
+        risk_flag = raw_eval.get("riskFlag", "Compliant")
+        cited_rule_id = str(raw_eval.get("citedRuleId", "")).strip()
+        cited_clause_text = str(raw_eval.get("citedClauseText", "")).strip()
+        reason = raw_eval.get("reason", "Evaluated against playbook rules.")
+        severity = raw_eval.get("severity", "Low")
+
+        if risk_flag in ["Non-Compliant", "Deviation", "Warning"]:
+            rule_valid = cited_rule_id in valid_rule_map
+            text_valid = bool(cited_clause_text) and (cited_clause_text.lower() in clause_text.lower() or len(cited_clause_text) >= 5)
+
+            if not rule_valid or not text_valid:
+                rejected_count += 1
+                continue
+
+            assessments.append({
+                "clauseId": str(clause_id),
+                "riskFlag": risk_flag,
+                "severity": severity if severity in ["Critical", "Major", "Minor", "Low"] else "Major",
+                "reason": reason,
+                "citedRuleId": cited_rule_id,
+                "citedClauseText": cited_clause_text
+            })
+
+    return {"assessments": assessments, "rejectedCount": rejected_count}
+
+
+def compute_risk_score_node(state: RiskComplianceState) -> dict[str, Any]:
+    assessments = state.get("assessments", [])
+    score = 100.0
+
+    for item in assessments:
+        sev = item.get("severity", "Major")
+        if item.get("riskFlag") in ["Non-Compliant", "Deviation", "Warning"]:
+            if sev == "Critical":
+                score -= 30.0
+            elif sev == "Major":
+                score -= 15.0
+            elif sev == "Minor":
+                score -= 5.0
+
+    final_score = max(0.0, min(100.0, score))
+    if final_score >= 85.0:
+        status = "Pass"
+    elif final_score >= 60.0:
+        status = "Warning"
+    else:
+        status = "Fail"
+
+    return {"overallRiskScore": final_score, "overallStatus": status}
+
+
+def store_result_node(state: RiskComplianceState) -> dict[str, Any]:
+    contract_id = state.get("contractId", "")
+    assessments = state.get("assessments", [])
+    rules = state.get("retrievedRules", [])
+    valid_rule_ids = {r["ruleId"] for r in rules if r.get("ruleId")}
+
+    validated_assessments = []
+    rejected_count = state.get("rejectedCount", 0)
+
+    for item in assessments:
+        r_id = item.get("citedRuleId", "")
+        c_text = item.get("citedClauseText", "")
+        if r_id in valid_rule_ids and bool(c_text):
+            validated_assessments.append(item)
+        else:
+            rejected_count += 1
+
+    return {
+        "assessments": validated_assessments,
+        "rejectedCount": rejected_count
+    }
+
+
+builder = StateGraph(RiskComplianceState)
+builder.add_node("retrieve_playbook_rules", retrieve_playbook_rules_node)
+builder.add_node("compare_clauses", compare_clauses_node)
+builder.add_node("compute_risk_score", compute_risk_score_node)
+builder.add_node("store_result", store_result_node)
+
+builder.set_entry_point("retrieve_playbook_rules")
+builder.add_edge("retrieve_playbook_rules", "compare_clauses")
+builder.add_edge("compare_clauses", "compute_risk_score")
+builder.add_edge("compute_risk_score", "store_result")
+builder.add_edge("store_result", END)
+
+risk_compliance_graph = builder.compile()
+
+
+@app.post("/index-playbook")
+def index_playbook(payload: IndexPlaybookRequest):
+    client, collection = _playbook_collection()
+    try:
+        rules_dict = [r.model_dump() for r in payload.rules]
+        if not rules_dict:
+            collection.delete_many({"workspaceId": payload.workspaceId})
+            return {"indexed": 0}
+
+        texts = [f"Rule: {r['ruleId']} {r['title']}\nCategory: {r['category']}\nRequirement: {r['expectedRequirement']}\nDescription: {r['description']}" for r in rules_dict]
+        embeddings = _create_embeddings(texts)
+
+        collection.delete_many({"workspaceId": payload.workspaceId})
+        collection.insert_many([
+            {
+                "workspaceId": payload.workspaceId,
+                "ruleId": r["ruleId"],
+                "title": r["title"],
+                "category": r["category"],
+                "description": r["description"],
+                "expectedRequirement": r["expectedRequirement"],
+                "severity": r["severity"],
+                "fallbackText": r["fallbackText"],
+                "embedding": embedding,
+            }
+            for r, embedding in zip(rules_dict, embeddings)
+        ])
+        return {"indexed": len(rules_dict)}
+    except PyMongoError as exc:
+        raise HTTPException(status_code=503, detail=f"Playbook indexing failed: {exc}") from exc
+    finally:
+        client.close()
+
+
+@app.post("/contracts/{contract_id}/evaluate-compliance")
+def evaluate_compliance(payload: EvaluateComplianceRequest, contract_id: str):
+    initial_state: RiskComplianceState = {
+        "contractId": contract_id,
+        "workspaceId": payload.workspaceId,
+        "clauses": payload.clauses,
+        "retrievedRules": [],
+        "assessments": [],
+        "overallRiskScore": 100.0,
+        "overallStatus": "Pass",
+        "rejectedCount": 0
+    }
+    final_state = risk_compliance_graph.invoke(initial_state)
+    return {
+        "contractId": final_state["contractId"],
+        "workspaceId": final_state["workspaceId"],
+        "overallRiskScore": final_state["overallRiskScore"],
+        "overallStatus": final_state["overallStatus"],
+        "assessments": final_state["assessments"],
+        "retrievedRulesCount": len(final_state["retrievedRules"]),
+        "rejectedCount": final_state["rejectedCount"]
+    }
