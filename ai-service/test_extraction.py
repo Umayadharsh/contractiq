@@ -1,8 +1,11 @@
 from fastapi.testclient import TestClient
+from google.genai import errors as genai_errors
+import pytest
 
 import main
 
 client = TestClient(main.app)
+VALID_GEMINI_RESPONSE = '{"parties":["Acme Corp"],"contractValue":"$100,000","startDate":"2026-01-01","endDate":"2027-01-01","governingLaw":"New York","paymentTerms":"Net 30","liabilityLimit":"$100,000","clauses":[{"type":"termination","text":"Either party may terminate on thirty days notice."}]}'
 
 
 def test_extract_accepts_valid_schema(monkeypatch):
@@ -106,3 +109,64 @@ def test_extract_uses_gemini_schema_without_additional_properties(monkeypatch):
 
     assert response.status_code == 200
     assert response.json()['clauses'][0]['type'] == 'termination'
+
+
+def test_extract_retries_transient_gemini_error_then_succeeds(monkeypatch):
+    class FakeModels:
+        def __init__(self):
+            self.calls = 0
+
+        def generate_content(self, **_kwargs):
+            self.calls += 1
+            if self.calls == 1:
+                raise genai_errors.ServerError(503, {'error': {'message': 'temporarily busy', 'status': 'UNAVAILABLE'}})
+            return type('Response', (), {'text': VALID_GEMINI_RESPONSE})()
+
+    models = FakeModels()
+    monkeypatch.setattr(main, '_gemini_client', lambda: type('Client', (), {'models': models})())
+    monkeypatch.setattr(main.time, 'sleep', lambda _delay: None)
+    monkeypatch.setattr(main.random, 'uniform', lambda _start, _end: 0)
+
+    response = client.post('/extract', json={'text': 'A sufficiently long dummy contract text.'})
+
+    assert response.status_code == 200
+    assert models.calls == 2
+
+
+def test_extract_returns_503_after_all_transient_retries(monkeypatch):
+    class FakeModels:
+        calls = 0
+
+        def generate_content(self, **_kwargs):
+            self.calls += 1
+            raise genai_errors.ServerError(503, {'error': {'message': 'temporarily busy', 'status': 'UNAVAILABLE'}})
+
+    models = FakeModels()
+    monkeypatch.setattr(main, '_gemini_client', lambda: type('Client', (), {'models': models})())
+    monkeypatch.setattr(main.time, 'sleep', lambda _delay: None)
+    monkeypatch.setattr(main.random, 'uniform', lambda _start, _end: 0)
+
+    response = client.post('/extract', json={'text': 'A sufficiently long dummy contract text.'})
+
+    assert response.status_code == 503
+    assert models.calls == 3
+    assert response.json()['detail']['message'] == 'Gemini extraction service is unavailable.'
+
+
+@pytest.mark.parametrize('status_code', [400, 404])
+def test_extract_does_not_retry_permanent_gemini_error(monkeypatch, status_code):
+    class FakeModels:
+        calls = 0
+
+        def generate_content(self, **_kwargs):
+            self.calls += 1
+            raise genai_errors.ClientError(status_code, {'error': {'message': 'permanent failure', 'status': 'INVALID_ARGUMENT'}})
+
+    models = FakeModels()
+    monkeypatch.setattr(main, '_gemini_client', lambda: type('Client', (), {'models': models})())
+    monkeypatch.setattr(main.time, 'sleep', lambda _delay: (_ for _ in ()).throw(AssertionError('permanent errors must not sleep')))
+
+    response = client.post('/extract', json={'text': 'A sufficiently long dummy contract text.'})
+
+    assert response.status_code == 503
+    assert models.calls == 1

@@ -1,11 +1,14 @@
 import json
 import os
 import re
+import random
+import time
 from typing import Any
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from google import genai
+from google.genai import errors as genai_errors
 from google.genai import types
 from pymongo import MongoClient
 from pymongo.errors import PyMongoError
@@ -403,6 +406,10 @@ def _gemini_response_schema() -> dict[str, Any]:
     return remove_unsupported_fields(ContractExtraction.model_json_schema())
 
 
+def _is_transient_gemini_error(error: Exception) -> bool:
+    return isinstance(error, genai_errors.APIError) and 500 <= error.code < 600
+
+
 def _extract_with_llm(raw_text: str, validation_error: str | None = None) -> dict[str, Any]:
     prompt = (
         "Extract the following fields from the contract: parties, contractValue, startDate, endDate, governingLaw, paymentTerms, liabilityLimit, clauses. "
@@ -415,27 +422,35 @@ def _extract_with_llm(raw_text: str, validation_error: str | None = None) -> dic
         + raw_text[:20000]
     )
 
-    try:
-        response = _gemini_client().models.generate_content(
-            model=os.getenv("GEMINI_MODEL", "gemini-3.6-flash"),
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json",
-                response_json_schema=_gemini_response_schema(),
-            ),
-        )
-    except HTTPException:
-        raise
-    except Exception as exc:
-        print(f"Gemini extraction error: {type(exc).__name__}: {exc}")
-        raise HTTPException(
-            status_code=503,
-            detail={
-                "message": "Gemini extraction service is unavailable.",
-                "error_type": type(exc).__name__,
-                "error": str(exc),
-            },
-        ) from exc
+    for attempt in range(3):
+        try:
+            response = _gemini_client().models.generate_content(
+                model=os.getenv("GEMINI_MODEL", "gemini-3.6-flash"),
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    response_json_schema=_gemini_response_schema(),
+                ),
+            )
+            break
+        except HTTPException:
+            raise
+        except Exception as exc:
+            if _is_transient_gemini_error(exc) and attempt < 2:
+                delay = (0.5 * (2 ** attempt)) + random.uniform(0, 0.25)
+                print(f"Gemini extraction retry {attempt + 1}/2 after {type(exc).__name__}; waiting {delay:.2f}s")
+                time.sleep(delay)
+                continue
+
+            print(f"Gemini extraction error: {type(exc).__name__}: {exc}")
+            raise HTTPException(
+                status_code=503,
+                detail={
+                    "message": "Gemini extraction service is unavailable.",
+                    "error_type": type(exc).__name__,
+                    "error": str(exc),
+                },
+            ) from exc
 
     content = response.text
     if not content:
