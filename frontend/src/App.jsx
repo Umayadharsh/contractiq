@@ -483,13 +483,26 @@ function App() {
                   <p className="eyebrow">CONTRACT DETAILS & RISK ASSESSMENT</p>
                   <h2>{selectedContract.title}</h2>
                 </div>
-                <button
-                  className="outline"
-                  disabled={evaluating}
-                  onClick={() => triggerComplianceEvaluation(selectedContract._id)}
-                >
-                  {evaluating ? 'Evaluating LangGraph...' : '🛡️ Evaluate Playbook Risk'}
-                </button>
+                <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                  {selectedContract.fileUrl && (
+                    <a
+                      href={`${API_URL}${selectedContract.fileUrl}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="outline"
+                      style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                    >
+                      📄 View Original Document
+                    </a>
+                  )}
+                  <button
+                    className="outline"
+                    disabled={evaluating}
+                    onClick={() => triggerComplianceEvaluation(selectedContract._id)}
+                  >
+                    {evaluating ? 'Evaluating LangGraph...' : '🛡️ Evaluate Playbook Risk'}
+                  </button>
+                </div>
               </div>
 
               {complianceReport && (
