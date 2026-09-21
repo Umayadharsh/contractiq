@@ -175,6 +175,16 @@ function App() {
     loadContracts()
   }
 
+  function selectContract(contractId) {
+    setSelectedContractId(contractId)
+    setTimeout(() => {
+      const panel = document.getElementById('contract-detail-panel')
+      if (panel) {
+        panel.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      }
+    }, 50)
+  }
+
   const selectedContract = useMemo(
     () => contracts.find((contract) => contract._id === selectedContractId) || null,
     [contracts, selectedContractId]
@@ -415,8 +425,16 @@ function App() {
                         return (
                           <tr
                             key={contract._id}
-                            className={selectedContractId === contract._id ? 'selected-row' : ''}
-                            onClick={() => setSelectedContractId(contract._id)}
+                            className={`contract-row ${selectedContractId === contract._id ? 'selected-row' : ''}`}
+                            onClick={() => selectContract(contract._id)}
+                            role="button"
+                            tabIndex={0}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault()
+                                selectContract(contract._id)
+                              }
+                            }}
                           >
                             <td>{contract.title}</td>
                             <td>{contract.counterparty}</td>
@@ -477,7 +495,7 @@ function App() {
           </section>
 
           {selectedContract && (
-            <section className="detail-panel">
+            <section className="detail-panel" id="contract-detail-panel">
               <div className="detail-header">
                 <div>
                   <p className="eyebrow">CONTRACT DETAILS & RISK ASSESSMENT</p>

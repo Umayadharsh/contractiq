@@ -303,14 +303,36 @@ td:first-child {
   color: #252719;
 }
 
-tr:hover:not(.selected-row) {
-  background: #F4EDE0;
+.contract-row {
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.15s ease;
+}
+
+.contract-row td {
   cursor: pointer;
 }
 
-tr.selected-row {
+.contract-row:hover {
+  background: #F4EDE0;
+}
+
+.contract-row:hover td:first-child {
+  color: #3F472C;
+}
+
+.contract-row.selected-row {
   background: #EAE1CF;
-  border-left: 3px solid #66704A;
+  border-left: 4px solid #66704A;
+}
+
+.contract-row.selected-row:hover {
+  background: #E4D9C3;
+}
+
+.contract-row:focus-visible {
+  outline: 2px solid #66704A;
+  outline-offset: -2px;
 }
 
 /* Tags & Badges */
