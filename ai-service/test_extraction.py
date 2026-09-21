@@ -77,3 +77,32 @@ def test_extract_keeps_gemini_client_open_during_request(monkeypatch):
     assert response.status_code == 200
     assert fake_client.request_completed
     assert not fake_client.closed
+
+
+def test_extract_uses_gemini_schema_without_additional_properties(monkeypatch):
+    class FakeModels:
+        def generate_content(self, **kwargs):
+            schema = kwargs['config'].response_json_schema
+
+            def assert_supported_schema(value):
+                if isinstance(value, dict):
+                    assert 'additionalProperties' not in value
+                    assert 'additional_properties' not in value
+                    for item in value.values():
+                        assert_supported_schema(item)
+                elif isinstance(value, list):
+                    for item in value:
+                        assert_supported_schema(item)
+
+            assert_supported_schema(schema)
+            return type('Response', (), {'text': '{"parties":["Acme Corp"],"contractValue":"$100,000","startDate":"2026-01-01","endDate":"2027-01-01","governingLaw":"New York","paymentTerms":"Net 30","liabilityLimit":"$100,000","clauses":[{"type":"termination","text":"Either party may terminate on thirty days notice."}]}'})()
+
+    class FakeGeminiClient:
+        models = FakeModels()
+
+    monkeypatch.setattr(main, '_gemini_client', lambda: FakeGeminiClient())
+
+    response = client.post('/extract', json={'text': 'A sufficiently long dummy contract text.'})
+
+    assert response.status_code == 200
+    assert response.json()['clauses'][0]['type'] == 'termination'

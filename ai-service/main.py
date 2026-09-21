@@ -388,6 +388,21 @@ def _build_json_schema() -> dict[str, Any]:
     }
 
 
+def _gemini_response_schema() -> dict[str, Any]:
+    def remove_unsupported_fields(value: Any) -> Any:
+        if isinstance(value, dict):
+            return {
+                key: remove_unsupported_fields(item)
+                for key, item in value.items()
+                if key not in {"additionalProperties", "additional_properties"}
+            }
+        if isinstance(value, list):
+            return [remove_unsupported_fields(item) for item in value]
+        return value
+
+    return remove_unsupported_fields(ContractExtraction.model_json_schema())
+
+
 def _extract_with_llm(raw_text: str, validation_error: str | None = None) -> dict[str, Any]:
     prompt = (
         "Extract the following fields from the contract: parties, contractValue, startDate, endDate, governingLaw, paymentTerms, liabilityLimit, clauses. "
@@ -406,7 +421,7 @@ def _extract_with_llm(raw_text: str, validation_error: str | None = None) -> dic
             contents=prompt,
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
-                response_schema=ContractExtraction,
+                response_json_schema=_gemini_response_schema(),
             ),
         )
     except HTTPException:
