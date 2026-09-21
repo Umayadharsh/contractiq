@@ -170,3 +170,46 @@ def test_extract_does_not_retry_permanent_gemini_error(monkeypatch, status_code)
 
     assert response.status_code == 503
     assert models.calls == 1
+
+
+def test_search_clauses_keeps_rrf_enabled_by_default(monkeypatch):
+    vector_results = [{'clauseId': 'vector-1', 'score': 0.9}]
+    keyword_results = [{'clauseId': 'keyword-1', 'score': 0.8}]
+
+    class FakeCollection:
+        def aggregate(self, pipeline):
+            return vector_results if '$vectorSearch' in pipeline[0] else keyword_results
+
+    class FakeClient:
+        def close(self):
+            pass
+
+    monkeypatch.delenv('RRF_ENABLED', raising=False)
+    monkeypatch.setattr(main, '_mongo_collection', lambda: (FakeClient(), FakeCollection()))
+    monkeypatch.setattr(main, '_create_embeddings', lambda _texts: [[0.1]])
+    monkeypatch.setattr(main, '_reciprocal_rank_fusion', lambda vector, keyword: [('rrf', vector, keyword)])
+
+    assert main._search_clauses('contract-1', 'question') == [('rrf', vector_results, keyword_results)]
+
+
+def test_search_clauses_bypasses_rrf_when_disabled(monkeypatch):
+    vector_results = [{'clauseId': f'vector-{index}'} for index in range(6)]
+    keyword_results = [{'clauseId': f'keyword-{index}'} for index in range(6)]
+
+    class FakeCollection:
+        def aggregate(self, pipeline):
+            return vector_results if '$vectorSearch' in pipeline[0] else keyword_results
+
+    class FakeClient:
+        def close(self):
+            pass
+
+    monkeypatch.setenv('RRF_ENABLED', 'false')
+    monkeypatch.setattr(main, '_mongo_collection', lambda: (FakeClient(), FakeCollection()))
+    monkeypatch.setattr(main, '_create_embeddings', lambda _texts: [[0.1]])
+    monkeypatch.setattr(main, '_reciprocal_rank_fusion', lambda *_args: (_ for _ in ()).throw(AssertionError('RRF should be bypassed')))
+
+    results = main._search_clauses('contract-1', 'question')
+
+    assert results == vector_results + keyword_results[:2]
+    assert len(results) == 8

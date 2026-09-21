@@ -275,6 +275,8 @@ def _search_clauses(contract_id: str, question: str) -> list[dict[str, Any]]:
             {"$limit": 20},
             {"$project": {"_id": 0, "clauseId": 1, "type": 1, "text": 1, "summary": 1, "score": {"$meta": "searchScore"}}},
         ]))
+        if os.getenv("RRF_ENABLED", "true").lower() == "false":
+            return (vector_results + keyword_results)[:8]
         return _reciprocal_rank_fusion(vector_results, keyword_results)
     except PyMongoError as exc:
         raise HTTPException(status_code=503, detail=f"RAG database search failed: {exc}") from exc
