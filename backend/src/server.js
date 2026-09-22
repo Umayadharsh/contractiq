@@ -30,7 +30,18 @@ app.use('/api/auth', authRoutes);
 app.use('/api/contracts', contractRoutes);
 app.use('/api/playbooks', playbookRoutes);
 app.use('/api/agentguard', agentGuardRoutes);
-app.use((error, _req, res, _next) => res.status(error.code === 'LIMIT_FILE_SIZE' ? 413 : error.statusCode || 500).json({ message: error.code === 'LIMIT_FILE_SIZE' ? 'File must be 10MB or smaller' : error.statusCode ? error.message : 'Server error' }));
+app.use((error, _req, res, _next) => {
+  const status = error.code === 'LIMIT_FILE_SIZE' ? 413 : error.statusCode || 500;
+  if (status >= 500) {
+    console.error('[ErrorHandler] Unhandled error:', { name: error.name, message: error.message, stack: error.stack });
+  }
+  const message = error.code === 'LIMIT_FILE_SIZE'
+    ? 'File must be 10MB or smaller'
+    : error.statusCode
+      ? error.message
+      : 'Server error';
+  res.status(status).json({ message });
+});
 
 mongoose.connect(process.env.MONGO_URI)
   .then(() => app.listen(port, () => console.log(`Backend listening on port ${port}`)))

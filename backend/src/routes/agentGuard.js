@@ -30,7 +30,10 @@ router.get('/policies', allowRoles('Admin'), async (req, res, next) => {
     const workspaceId = workspaceFor(req);
     await requireWorkspace(req, workspaceId);
     res.json(await AgentPolicy.find({ workspaceId }).sort({ priority: -1, policyId: 1, version: -1 }));
-  } catch (error) { next(error); }
+  } catch (error) {
+    console.error('[AgentGuard] GET /policies failed:', { name: error.name, message: error.message, stack: error.stack });
+    next(error);
+  }
 });
 
 router.get('/policies/:id', allowRoles('Admin'), async (req, res, next) => {
@@ -53,9 +56,15 @@ router.post('/policies', allowRoles('Admin'), async (req, res, next) => {
     if (!Object.keys(trigger).some((key) => key === 'event' ? Boolean(trigger[key]) : Array.isArray(trigger[key]) && trigger[key].length)) {
       return res.status(400).json({ message: 'At least one policy trigger is required.' });
     }
+    const normalizedPolicyId = String(policyId).trim().toUpperCase();
+    const policyVersion = version || 1;
+    const existing = await AgentPolicy.findOne({ workspaceId, policyId: normalizedPolicyId, version: policyVersion });
+    if (existing) {
+      return res.status(409).json({ message: `A AgentGuard policy with policyId '${normalizedPolicyId}' and version ${policyVersion} already exists in this workspace. To change it, edit or delete the existing policy.` });
+    }
     const policy = await AgentPolicy.create({
-      policyId, workspaceId, name, description, priority: priority ?? 0, trigger, decision, action,
-      approval: approval || {}, version: version || 1, createdBy: req.user.id, updatedBy: req.user.id,
+      policyId: normalizedPolicyId, workspaceId, name, description, priority: priority ?? 0, trigger, decision, action,
+      approval: approval || {}, version: policyVersion, createdBy: req.user.id, updatedBy: req.user.id,
     });
     res.status(201).json(policy);
   } catch (error) { next(error); }
@@ -98,8 +107,29 @@ router.get('/pending', async (req, res, next) => {
   try {
     const workspaceId = workspaceFor(req);
     await requireWorkspace(req, workspaceId);
-    res.json(await AgentAction.find({ workspaceId, status: 'pending_approval' }).sort({ createdAt: -1 }).populate('contractId', 'title counterparty'));
-  } catch (error) { next(error); }
+    const actions = await AgentAction.find({ workspaceId, status: 'pending_approval' }).sort({ createdAt: -1 });
+
+    const actionsWithContract = await Promise.all(actions.map(async (action) => {
+      const contractId = action.contractId;
+      if (!contractId || !/^[a-f0-9]{24}$/i.test(String(contractId))) {
+        if (contractId) {
+          console.warn(`[AgentGuard] GET /pending: skipping contract population for action ${action.actionId} with malformed contractId '${String(contractId)}'`);
+        }
+        return action;
+      }
+      try {
+        await action.populate('contractId', 'title counterparty');
+      } catch (error) {
+        console.warn(`[AgentGuard] GET /pending: contract population failed for action ${action.actionId}: ${error.name}: ${error.message}`);
+      }
+      return action;
+    }));
+
+    res.json(actionsWithContract);
+  } catch (error) {
+    console.error('[AgentGuard] GET /pending failed:', { name: error.name, message: error.message, stack: error.stack });
+    next(error);
+  }
 });
 
 router.post('/actions/:id/approve', async (req, res, next) => {
