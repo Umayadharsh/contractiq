@@ -1,10 +1,9 @@
 {
   "name": "contractiq-guard",
   "private": true,
-  "workspaces": ["backend"],
   "scripts": {
     "dev:frontend": "npm --prefix frontend run dev",
-    "dev:backend": "npm --workspace backend run dev",
+    "dev:backend": "npm --prefix backend run dev",
     "dev:ai": "python -m uvicorn ai-service.main:app --reload --port 8000"
   }
 }
