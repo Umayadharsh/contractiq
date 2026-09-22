@@ -32,7 +32,38 @@ def test_extract_accepts_valid_schema(monkeypatch):
     assert payload['clauses'][0]['type'] == 'termination'
 
 
-def test_extract_rejects_low_confidence_or_missing_fields(monkeypatch):
+def test_extract_preserves_valid_clauses_when_optional_metadata_is_missing(monkeypatch):
+    def fake_extract(raw_text):
+        return {
+            'parties': ['Acme Corp', 'Northwind LLC'],
+            'contractValue': None,
+            'startDate': None,
+            'endDate': None,
+            'governingLaw': 'California',
+            'paymentTerms': 'Net 30',
+            'liabilityLimit': None,
+            'clauses': [
+                {
+                    'type': 'termination',
+                    'text': 'Either party may terminate this Agreement immediately without prior notice.',
+                    'summary': 'Immediate termination without prior notice.',
+                },
+            ],
+        }
+
+    monkeypatch.setattr(main, '_extract_with_llm', fake_extract)
+    response = client.post('/extract', json={'text': 'A contract with a valid termination clause but incomplete metadata.'})
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload['contractValue'] is None
+    assert payload['startDate'] is None
+    assert payload['endDate'] is None
+    assert payload['clauses'][0]['type'] == 'termination'
+    assert payload['clauses'][0]['text'] == 'Either party may terminate this Agreement immediately without prior notice.'
+
+
+def test_extract_rejects_malformed_required_data(monkeypatch):
     def fake_extract(raw_text):
         return {
             'parties': ['unknown'],

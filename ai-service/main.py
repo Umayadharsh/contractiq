@@ -313,13 +313,9 @@ def _looks_placeholder(value: Any) -> bool:
     return not normalized or normalized in INVALID_PLACEHOLDERS or normalized.startswith("unknown")
 
 
-def _has_low_confidence(extraction: ContractExtraction) -> bool:
+def _has_invalid_required_data(extraction: ContractExtraction) -> bool:
     for party in extraction.parties:
         if party.value is None or _looks_placeholder(party.value) or party.confidence != "high":
-            return True
-    for field_name in ["contractValue", "startDate", "endDate", "governingLaw", "paymentTerms", "liabilityLimit"]:
-        field_value = getattr(extraction, field_name)
-        if field_value is not None and (field_value.value is None or _looks_placeholder(field_value.value) or field_value.confidence != "high"):
             return True
     if not extraction.clauses:
         return True
@@ -529,7 +525,7 @@ def extract_contract(payload: ExtractionRequest):
         try:
             raw_output = _extract_with_llm(payload.text)
             validated = ContractExtraction.model_validate(raw_output)
-            if _has_low_confidence(validated):
+            if _has_invalid_required_data(validated):
                 last_error = "low-confidence or missing contract fields"
                 continue
             return _serialize_extraction(validated)
