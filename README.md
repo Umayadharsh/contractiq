@@ -19,6 +19,7 @@ The first registered user is the workspace Admin. Later registrations are Viewer
 - Set Render's `MONGO_URI` to a MongoDB Atlas connection string and `CLIENT_URL` to the Vercel URL.
 - Deploy the FastAPI AI service from the `ai-service` root directory with `pip install -r requirements.txt` and `uvicorn main:app --host 0.0.0.0 --port $PORT`.
 - Set the backend's `AI_SERVICE_URL` to the deployed AI service URL.
+- Set the same `AI_INTERNAL_SECRET` on the backend and AI service. The backend sends it as `X-Internal-Secret` when calling AgentGuard resume and complete.
 
 The hosted register/login/upload flow can only be confirmed after the Vercel and Render services are created and their URLs and MongoDB Atlas credentials are supplied.
 

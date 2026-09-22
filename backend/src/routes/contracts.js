@@ -18,6 +18,7 @@ const upload = multer({
   fileFilter: (_req, file, cb) => cb(null, ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain'].includes(file.mimetype))
 });
 const AI_SERVICE_URL = process.env.AI_SERVICE_URL || 'http://localhost:8000';
+const aiInternalHeaders = { 'Content-Type': 'application/json', 'X-Internal-Secret': process.env.AI_INTERNAL_SECRET || '' };
 
 router.use(requireAuth);
 router.get('/', async (req, res, next) => {
@@ -79,7 +80,7 @@ router.post('/:id/evaluate-compliance', async (req, res, next) => {
       const action = await AgentAction.findOne({ actionId: body.agentGuard.actionId });
       if (!action) return res.status(500).json({ message: 'AgentGuard action record was not found.' });
       await executeAgentAction(action);
-      await fetch(`${AI_SERVICE_URL}/agentguard/complete`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ evaluationRunId: body.evaluationRunId, actionId: body.agentGuard.actionId, status: 'completed' }) });
+      await fetch(`${AI_SERVICE_URL}/agentguard/complete`, { method: 'POST', headers: aiInternalHeaders, body: JSON.stringify({ evaluationRunId: body.evaluationRunId, actionId: body.agentGuard.actionId, status: 'completed' }) });
     }
     res.json(body);
   } catch (error) { next(error); }

@@ -1,3 +1,4 @@
+import hmac
 import json
 import os
 import re
@@ -10,7 +11,7 @@ from typing_extensions import TypedDict
 from langgraph.graph import StateGraph, END
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Header, HTTPException
 from google import genai
 from google.genai import errors as genai_errors
 from google.genai import types
@@ -632,6 +633,13 @@ def _agentguard_database():
     return client, client[os.getenv("MONGO_DB", "contractiq")]
 
 
+def _require_internal_secret(x_internal_secret: str | None = Header(default=None)):
+    expected = os.getenv("AI_INTERNAL_SECRET") or ""
+    provided = x_internal_secret or ""
+    if not expected or not hmac.compare_digest(provided, expected):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+
 def _agent_now():
     return datetime.now(timezone.utc)
 
@@ -999,7 +1007,8 @@ def evaluate_compliance(payload: EvaluateComplianceRequest, contract_id: str):
 
 
 @app.post("/agentguard/resume")
-def resume_agent_evaluation(payload: AgentResumeRequest):
+def resume_agent_evaluation(payload: AgentResumeRequest, x_internal_secret: str | None = Header(default=None)):
+    _require_internal_secret(x_internal_secret)
     client, database = _agentguard_database()
     try:
         try:
@@ -1017,7 +1026,8 @@ def resume_agent_evaluation(payload: AgentResumeRequest):
 
 
 @app.post("/agentguard/complete")
-def complete_agent_evaluation(payload: AgentCompleteRequest):
+def complete_agent_evaluation(payload: AgentCompleteRequest, x_internal_secret: str | None = Header(default=None)):
+    _require_internal_secret(x_internal_secret)
     client, database = _agentguard_database()
     try:
         try:

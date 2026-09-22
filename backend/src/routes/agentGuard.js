@@ -7,6 +7,7 @@ import { allowRoles, requireAuth } from '../middleware/auth.js';
 
 const router = Router();
 const AI_SERVICE_URL = process.env.AI_SERVICE_URL || 'http://localhost:8000';
+const aiInternalHeaders = { 'Content-Type': 'application/json', 'X-Internal-Secret': process.env.AI_INTERNAL_SECRET || '' };
 
 function workspaceFor(req) {
   return req.query.workspaceId || req.body.workspaceId || req.user.id;
@@ -109,12 +110,12 @@ router.post('/actions/:id/approve', async (req, res, next) => {
     if (action.status !== 'pending_approval') return res.status(409).json({ message: 'Action is not awaiting approval.' });
     if (String(action.proposal?.proposedBy || '') === String(req.user.id)) return res.status(403).json({ message: 'The proposer cannot approve their own action.' });
     if (!action.policySnapshot?.approval?.approverRoles?.includes(req.user.role)) return res.status(403).json({ message: 'Role is not allowed to approve this action.' });
-    const response = await fetch(`${AI_SERVICE_URL}/agentguard/resume`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ evaluationRunId: action.evaluationRunId, actionId: action.actionId, decision: 'approve', actorId: String(req.user.id), comment: req.body.comment || '' }) });
+    const response = await fetch(`${AI_SERVICE_URL}/agentguard/resume`, { method: 'POST', headers: aiInternalHeaders, body: JSON.stringify({ evaluationRunId: action.evaluationRunId, actionId: action.actionId, decision: 'approve', actorId: String(req.user.id), comment: req.body.comment || '' }) });
     const result = await response.json().catch(() => ({}));
     if (!response.ok) return res.status(response.status).json({ message: result.detail || 'AgentGuard resume failed' });
     const approvedAction = await AgentAction.findOne({ _id: action._id });
     const executed = await executeAgentAction(approvedAction);
-    await fetch(`${AI_SERVICE_URL}/agentguard/complete`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ evaluationRunId: action.evaluationRunId, actionId: action.actionId, status: 'completed' }) });
+    await fetch(`${AI_SERVICE_URL}/agentguard/complete`, { method: 'POST', headers: aiInternalHeaders, body: JSON.stringify({ evaluationRunId: action.evaluationRunId, actionId: action.actionId, status: 'completed' }) });
     res.json({ action: executed, runStatus: 'completed', resumed: true });
   } catch (error) { next(error); }
 });
@@ -127,7 +128,7 @@ router.post('/actions/:id/reject', async (req, res, next) => {
     if (action.status !== 'pending_approval') return res.status(409).json({ message: 'Action is not awaiting approval.' });
     if (String(action.proposal?.proposedBy || '') === String(req.user.id)) return res.status(403).json({ message: 'The proposer cannot reject their own action.' });
     if (!action.policySnapshot?.approval?.approverRoles?.includes(req.user.role)) return res.status(403).json({ message: 'Role is not allowed to reject this action.' });
-    const response = await fetch(`${AI_SERVICE_URL}/agentguard/resume`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ evaluationRunId: action.evaluationRunId, actionId: action.actionId, decision: 'reject', actorId: String(req.user.id), comment: req.body.comment || '' }) });
+    const response = await fetch(`${AI_SERVICE_URL}/agentguard/resume`, { method: 'POST', headers: aiInternalHeaders, body: JSON.stringify({ evaluationRunId: action.evaluationRunId, actionId: action.actionId, decision: 'reject', actorId: String(req.user.id), comment: req.body.comment || '' }) });
     const result = await response.json().catch(() => ({}));
     if (!response.ok) return res.status(response.status).json({ message: result.detail || 'AgentGuard resume failed' });
     res.json({ action: await AgentAction.findOne({ _id: action._id }), runStatus: 'completed', resumed: true });
