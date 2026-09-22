@@ -27,6 +27,15 @@ function App() {
   const [loading, setLoading] = useState(false)
   const [evaluating, setEvaluating] = useState(false)
   const [editingRuleId, setEditingRuleId] = useState(null)
+  const [agentPolicies, setAgentPolicies] = useState([])
+  const [pendingActions, setPendingActions] = useState([])
+  const [editingPolicyId, setEditingPolicyId] = useState(null)
+  const [policyForm, setPolicyForm] = useState({
+    policyId: '', name: '', description: '', priority: 0, decision: 'escalate',
+    event: 'compliance_evaluation_completed', actionType: 'update_contract',
+    riskFlags: 'Non-Compliant,Deviation', severities: 'Major', ruleIds: '', categories: '',
+    approverRoles: 'Admin', isActive: true,
+  })
 
   // Playbook Form State
   const [ruleForm, setRuleForm] = useState({
@@ -44,6 +53,8 @@ function App() {
     if (session) {
       loadContracts()
       loadPlaybookRules()
+      if (session.user.role === 'Admin') loadAgentPolicies()
+      loadPendingActions()
     }
   }, [session])
 
@@ -62,6 +73,57 @@ function App() {
   async function loadPlaybookRules() {
     const response = await fetch(`${API_URL}/api/playbooks?all=true`, { headers: { Authorization: `Bearer ${session.token}` } })
     if (response.ok) setPlaybookRules(await response.json())
+  }
+
+  async function loadAgentPolicies() {
+    const response = await fetch(`${API_URL}/api/agentguard/policies`, { headers: { Authorization: `Bearer ${session.token}` } })
+    if (response.ok) setAgentPolicies(await response.json())
+  }
+
+  async function loadPendingActions() {
+    const response = await fetch(`${API_URL}/api/agentguard/pending`, { headers: { Authorization: `Bearer ${session.token}` } })
+    if (response.ok) setPendingActions(await response.json())
+  }
+
+  function resetPolicyForm() {
+    setEditingPolicyId(null)
+    setPolicyForm({ policyId: '', name: '', description: '', priority: 0, decision: 'escalate', event: 'compliance_evaluation_completed', actionType: 'update_contract', riskFlags: 'Non-Compliant,Deviation', severities: 'Major', ruleIds: '', categories: '', approverRoles: 'Admin', isActive: true })
+  }
+
+  function startEditingPolicy(policy) {
+    setEditingPolicyId(policy._id)
+    setPolicyForm({
+      policyId: policy.policyId, name: policy.name, description: policy.description, priority: policy.priority,
+      decision: policy.decision, event: policy.trigger?.event || '', actionType: policy.action?.type || '',
+      riskFlags: (policy.trigger?.riskFlags || []).join(','), severities: (policy.trigger?.severities || []).join(','),
+      ruleIds: (policy.trigger?.ruleIds || []).join(','), categories: (policy.trigger?.categories || []).join(','),
+      approverRoles: (policy.approval?.approverRoles || []).join(','), isActive: policy.isActive,
+    })
+  }
+
+  async function saveAgentPolicy(event) {
+    event.preventDefault()
+    const fields = (value) => value.split(',').map((item) => item.trim()).filter(Boolean)
+    const payload = {
+      policyId: policyForm.policyId, name: policyForm.name, description: policyForm.description,
+      priority: Number(policyForm.priority), decision: policyForm.decision, isActive: policyForm.isActive,
+      trigger: { event: policyForm.event, riskFlags: fields(policyForm.riskFlags), severities: fields(policyForm.severities), ruleIds: fields(policyForm.ruleIds), categories: fields(policyForm.categories) },
+      action: { type: policyForm.actionType, payloadTemplate: {} },
+      approval: { required: policyForm.decision === 'escalate', approverRoles: fields(policyForm.approverRoles), minApprovals: 1 },
+    }
+    const url = editingPolicyId ? `${API_URL}/api/agentguard/policies/${editingPolicyId}` : `${API_URL}/api/agentguard/policies`
+    const response = await fetch(url, { method: editingPolicyId ? 'PUT' : 'POST', headers: { Authorization: `Bearer ${session.token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+    if (!response.ok) return setMessage((await response.json()).message || 'Failed to save AgentGuard policy')
+    setMessage('AgentGuard policy saved successfully.')
+    resetPolicyForm()
+    loadAgentPolicies()
+  }
+
+  async function decideAgentAction(actionId, decision) {
+    const response = await fetch(`${API_URL}/api/agentguard/actions/${actionId}/${decision}`, { method: 'POST', headers: { Authorization: `Bearer ${session.token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({}) })
+    if (!response.ok) return setMessage((await response.json()).message || 'AgentGuard action failed')
+    setMessage(`Action ${decision}d successfully.`)
+    loadPendingActions()
   }
 
   async function submitAuth(event) {
@@ -246,6 +308,14 @@ function App() {
               🛡️ Company Playbook (Admin)
             </button>
           )}
+          {session.user.role === 'Admin' && (
+            <button className={`outline ${activeTab === 'agentguard' ? 'active' : ''}`} onClick={() => setActiveTab('agentguard')}>
+              ⚙️ AgentGuard Policies
+            </button>
+          )}
+          <button className={`outline ${activeTab === 'pending' ? 'active' : ''}`} onClick={() => setActiveTab('pending')}>
+            ⏳ Pending Approval ({pendingActions.length})
+          </button>
           <span>
             {session.user.name} · <strong>{session.user.role}</strong>
           </span>
@@ -262,7 +332,42 @@ function App() {
       </header>
 
       {/* --- PLAYBOOK ADMIN TAB --- */}
-      {activeTab === 'playbook' && session.user.role === 'Admin' ? (
+      {activeTab === 'agentguard' && session.user.role === 'Admin' ? (
+        <section className="content-grid">
+          <div className="table-panel">
+            <div className="section-heading">
+              <div><p className="eyebrow">AGENTGUARD POLICY CONTROL</p><h2>Action policies</h2></div>
+              <span className="status-dot">● Admin Mode</span>
+            </div>
+            {agentPolicies.length ? <div className="table-wrap"><table><thead><tr><th>Policy</th><th>Priority</th><th>Decision</th><th>Version</th><th>Status</th><th>Action</th></tr></thead><tbody>
+              {agentPolicies.map((policy) => <tr key={policy._id}><td><strong>{policy.policyId}</strong><br />{policy.name}</td><td>{policy.priority}</td><td>{policy.decision}</td><td>{policy.version}</td><td>{policy.isActive ? 'Active' : 'Inactive'}</td><td><button className="text-button" onClick={() => startEditingPolicy(policy)}>Edit</button></td></tr>)}
+            </tbody></table></div> : <div className="empty"><strong>No AgentGuard policies defined.</strong><span>Create a policy to control external actions.</span></div>}
+          </div>
+          <aside className="upload-panel"><p className="eyebrow">{editingPolicyId ? 'EDIT POLICY' : 'NEW AGENTGUARD POLICY'}</p><h2>{editingPolicyId ? 'Edit policy' : 'Create policy'}</h2>
+            <form onSubmit={saveAgentPolicy}>
+              <input placeholder="Policy ID" value={policyForm.policyId} disabled={Boolean(editingPolicyId)} onChange={(e) => setPolicyForm({ ...policyForm, policyId: e.target.value })} required />
+              <input placeholder="Name" value={policyForm.name} onChange={(e) => setPolicyForm({ ...policyForm, name: e.target.value })} required />
+              <textarea placeholder="Description" value={policyForm.description} onChange={(e) => setPolicyForm({ ...policyForm, description: e.target.value })} required />
+              <input type="number" placeholder="Priority" value={policyForm.priority} onChange={(e) => setPolicyForm({ ...policyForm, priority: e.target.value })} />
+              <select value={policyForm.decision} onChange={(e) => setPolicyForm({ ...policyForm, decision: e.target.value })}><option value="auto_approve">auto_approve</option><option value="escalate">escalate</option><option value="deny">deny</option></select>
+              <input placeholder="Action type" value={policyForm.actionType} onChange={(e) => setPolicyForm({ ...policyForm, actionType: e.target.value })} required />
+              <input placeholder="Risk flags, comma separated" value={policyForm.riskFlags} onChange={(e) => setPolicyForm({ ...policyForm, riskFlags: e.target.value })} />
+              <input placeholder="Severities, comma separated" value={policyForm.severities} onChange={(e) => setPolicyForm({ ...policyForm, severities: e.target.value })} />
+              <input placeholder="Rule IDs, comma separated" value={policyForm.ruleIds} onChange={(e) => setPolicyForm({ ...policyForm, ruleIds: e.target.value })} />
+              <input placeholder="Categories, comma separated" value={policyForm.categories} onChange={(e) => setPolicyForm({ ...policyForm, categories: e.target.value })} />
+              <input placeholder="Approver roles, comma separated" value={policyForm.approverRoles} onChange={(e) => setPolicyForm({ ...policyForm, approverRoles: e.target.value })} />
+              <label><input type="checkbox" checked={policyForm.isActive} onChange={(e) => setPolicyForm({ ...policyForm, isActive: e.target.checked })} /> Active policy</label>
+              <button>{editingPolicyId ? 'Update policy' : 'Create policy'}</button>{editingPolicyId && <button type="button" className="outline" onClick={resetPolicyForm}>Cancel</button>}
+            </form>
+          </aside>
+        </section>
+      ) : activeTab === 'pending' ? (
+        <section className="content-grid"><div className="table-panel"><div className="section-heading"><div><p className="eyebrow">AGENTGUARD WORKFLOW</p><h2>Pending approval</h2></div></div>
+          {pendingActions.length ? <div className="table-wrap"><table><thead><tr><th>Contract</th><th>Action</th><th>Policy</th><th>Reason</th><th>Risk</th><th>Decision</th></tr></thead><tbody>
+            {pendingActions.map((action) => <tr key={action._id}><td>{action.contractId?.title || action.contractId}</td><td>{action.type}</td><td>{action.policyId} v{action.policyVersion}</td><td>{action.proposal?.reason}</td><td>{(action.proposal?.riskAssessmentIds || []).join(', ') || 'None'}</td><td><button className="text-button" onClick={() => decideAgentAction(action._id, 'approve')}>Approve</button><button className="text-button danger" onClick={() => decideAgentAction(action._id, 'reject')}>Reject</button></td></tr>)}
+          </tbody></table></div> : <div className="empty"><strong>No actions await approval.</strong></div>}
+        </div></section>
+      ) : activeTab === 'playbook' && session.user.role === 'Admin' ? (
         <section className="content-grid">
           <div className="table-panel">
             <div className="section-heading">

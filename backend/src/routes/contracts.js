@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { randomUUID } from 'node:crypto';
 import multer from 'multer';
 import path from 'node:path';
 import Clause from '../models/Clause.js';
@@ -6,6 +7,9 @@ import Contract from '../models/Contract.js';
 import ExtractionLog from '../models/ExtractionLog.js';
 import { allowRoles, requireAuth } from '../middleware/auth.js';
 import { extractContractData } from '../services/extractionService.js';
+import AgentAction from '../models/AgentAction.js';
+import { executeAgentAction } from '../services/agentActionExecutor.js';
+import WorkspaceMembership from '../models/WorkspaceMembership.js';
 
 const router = Router();
 const upload = multer({
@@ -52,8 +56,12 @@ router.post('/:id/evaluate-compliance', async (req, res, next) => {
     const workspaceId = req.query.workspaceId || req.user.id;
     const contract = await Contract.findOne({ _id: req.params.id, workspaceId });
     if (!contract) return res.status(404).json({ message: 'Contract not found' });
+    if (workspaceId !== req.user.id && !(await WorkspaceMembership.exists({ workspaceId, userId: req.user.id }))) {
+      return res.status(403).json({ message: 'Workspace membership is required for compliance evaluation.' });
+    }
 
     const clauses = await Clause.find({ contractId: contract._id });
+    const evaluationRunId = randomUUID();
 
     const response = await fetch(`${AI_SERVICE_URL}/contracts/${contract._id}/evaluate-compliance`, {
       method: 'POST',
@@ -61,13 +69,18 @@ router.post('/:id/evaluate-compliance', async (req, res, next) => {
       body: JSON.stringify({
         workspaceId,
         clauses: clauses.map((c) => ({ id: String(c._id), type: c.type, text: c.text, summary: c.summary || '' })),
+        evaluationRunId,
+        requestedBy: { userId: String(req.user.id), role: req.user.role },
       }),
     });
     const body = await response.json().catch(() => ({}));
     if (!response.ok) return res.status(response.status).json({ message: body?.detail || body?.message || 'Compliance evaluation failed' });
-
-    contract.complianceReport = body;
-    await contract.save();
+    if (body.agentGuard?.actionStatus === 'approved') {
+      const action = await AgentAction.findOne({ actionId: body.agentGuard.actionId });
+      if (!action) return res.status(500).json({ message: 'AgentGuard action record was not found.' });
+      await executeAgentAction(action);
+      await fetch(`${AI_SERVICE_URL}/agentguard/complete`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ evaluationRunId: body.evaluationRunId, actionId: body.agentGuard.actionId, status: 'completed' }) });
+    }
     res.json(body);
   } catch (error) { next(error); }
 });

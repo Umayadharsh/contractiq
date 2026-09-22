@@ -3,6 +3,8 @@ import os
 import re
 import random
 import time
+import uuid
+from datetime import datetime, timezone
 from typing import Any
 from typing_extensions import TypedDict
 from langgraph.graph import StateGraph, END
@@ -15,6 +17,7 @@ from google.genai import types
 from pymongo import MongoClient
 from pymongo.errors import PyMongoError
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
+from evaluator import complete_evaluation_run, evaluate, resume_evaluation_run
 
 load_dotenv()
 
@@ -178,6 +181,20 @@ class IndexContractRequest(BaseModel):
 
 class AskRequest(BaseModel):
     question: str = Field(..., min_length=3)
+
+
+class AgentResumeRequest(BaseModel):
+    evaluationRunId: str
+    actionId: str
+    decision: str
+    actorId: str | None = None
+    comment: str = ""
+
+
+class AgentCompleteRequest(BaseModel):
+    evaluationRunId: str
+    actionId: str
+    status: str
 
 
 def _mongo_collection():
@@ -566,6 +583,8 @@ class IndexPlaybookRequest(BaseModel):
 class EvaluateComplianceRequest(BaseModel):
     workspaceId: str
     clauses: list[dict[str, Any]] = Field(default_factory=list)
+    evaluationRunId: str
+    requestedBy: dict[str, Any] = Field(default_factory=dict)
 
 
 class RiskAssessment(TypedDict):
@@ -586,6 +605,14 @@ class RiskComplianceState(TypedDict):
     overallRiskScore: float
     overallStatus: str
     rejectedCount: int
+    proposedActions: list[dict[str, Any]]
+    evaluationRunId: str
+    requestedBy: dict[str, Any]
+    agentAction: dict[str, Any]
+    agentGuard: dict[str, Any]
+    resumeDecision: str
+    runStatus: str
+    resumed: bool
 
 
 def _playbook_collection():
@@ -595,6 +622,18 @@ def _playbook_collection():
     client = MongoClient(uri, serverSelectionTimeoutMS=5000)
     database = client[os.getenv("MONGO_DB", "contractiq")]
     return client, database[os.getenv("PLAYBOOK_COLLECTION", "playbook_embeddings")]
+
+
+def _agentguard_database():
+    uri = os.getenv("MONGO_URI")
+    if not uri:
+        raise HTTPException(status_code=503, detail="MONGO_URI is not configured for AgentGuard.")
+    client = MongoClient(uri, serverSelectionTimeoutMS=5000)
+    return client, client[os.getenv("MONGO_DB", "contractiq")]
+
+
+def _agent_now():
+    return datetime.now(timezone.utc)
 
 
 def _search_playbook_rules(workspace_id: str, clauses: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -799,19 +838,97 @@ def store_result_node(state: RiskComplianceState) -> dict[str, Any]:
     }
 
 
+def propose_action_node(state: RiskComplianceState) -> dict[str, Any]:
+    evaluation_run_id = state.get("evaluationRunId")
+    rule_categories = {rule.get("ruleId"): rule.get("category") for rule in state.get("retrievedRules", [])}
+    policy_assessments = [
+        {**assessment, "category": rule_categories.get(assessment.get("citedRuleId"))}
+        for assessment in state.get("assessments", [])
+    ]
+    action = {
+        "actionId": str(uuid.uuid4()),
+        "type": "update_contract",
+        "payload": {"complianceReport": {
+            "contractId": state.get("contractId", ""),
+            "workspaceId": state.get("workspaceId", ""),
+            "overallRiskScore": state.get("overallRiskScore", 100.0),
+            "overallStatus": state.get("overallStatus", "Pass"),
+            "assessments": state.get("assessments", []),
+            "retrievedRulesCount": len(state.get("retrievedRules", [])),
+            "rejectedCount": state.get("rejectedCount", 0),
+        }},
+        "contractId": state.get("contractId", ""),
+        "workspaceId": state.get("workspaceId", ""),
+        "evaluationRunId": evaluation_run_id or "",
+        "assessmentIds": [item.get("clauseId") for item in state.get("assessments", [])],
+        "proposal": {
+            "title": "Persist compliance evaluation report",
+            "reason": "Store the completed compliance evaluation through AgentGuard.",
+            "riskAssessmentIds": [item.get("clauseId") for item in state.get("assessments", [])],
+            "requestedChanges": {"complianceReport": {
+                "contractId": state.get("contractId", ""),
+                "workspaceId": state.get("workspaceId", ""),
+                "overallRiskScore": state.get("overallRiskScore", 100.0),
+                "overallStatus": state.get("overallStatus", "Pass"),
+                "assessments": state.get("assessments", []),
+                "retrievedRulesCount": len(state.get("retrievedRules", [])),
+                "rejectedCount": state.get("rejectedCount", 0),
+            }},
+            "target": {"contractId": state.get("contractId", "")},
+            "proposedBy": state.get("requestedBy", {}).get("userId"),
+        },
+    }
+    if not evaluation_run_id:
+        return {"proposedActions": [action], "agentAction": action, "agentGuard": {}}
+
+    context = {
+        "event": "compliance_evaluation_completed",
+        "workspaceId": state.get("workspaceId", ""),
+        "contractId": state.get("contractId", ""),
+        "evaluationRunId": evaluation_run_id,
+        "assessments": policy_assessments,
+        "requestedBy": state.get("requestedBy", {}),
+    }
+    client, database = _agentguard_database()
+    try:
+        agent_guard = evaluate(action, context, database)
+        database.agentRuns.update_one(
+            {"evaluationRunId": evaluation_run_id},
+            {"$set": {"state": {**state, "agentAction": action, "agentGuard": agent_guard, "proposedActions": [action]}, "updatedAt": _agent_now()}},
+            upsert=True,
+        )
+    finally:
+        client.close()
+    return {"proposedActions": [action], "agentAction": action, "agentGuard": agent_guard}
+
+
 builder = StateGraph(RiskComplianceState)
 builder.add_node("retrieve_playbook_rules", retrieve_playbook_rules_node)
 builder.add_node("compare_clauses", compare_clauses_node)
 builder.add_node("compute_risk_score", compute_risk_score_node)
 builder.add_node("store_result", store_result_node)
+builder.add_node("propose_action", propose_action_node)
 
 builder.set_entry_point("retrieve_playbook_rules")
 builder.add_edge("retrieve_playbook_rules", "compare_clauses")
 builder.add_edge("compare_clauses", "compute_risk_score")
 builder.add_edge("compute_risk_score", "store_result")
-builder.add_edge("store_result", END)
+builder.add_edge("store_result", "propose_action")
+builder.add_edge("propose_action", END)
 
 risk_compliance_graph = builder.compile()
+
+
+def resume_action_node(state: RiskComplianceState) -> dict[str, Any]:
+    decision = state.get("resumeDecision")
+    return {"runStatus": "ready_for_execution" if decision == "approve" else "completed", "resumed": True}
+
+
+resume_builder = StateGraph(RiskComplianceState)
+resume_builder.add_node("resume_action", resume_action_node)
+resume_builder.set_entry_point("resume_action")
+resume_builder.add_edge("resume_action", END)
+resume_evaluation_graph = resume_builder.compile()
 
 
 @app.post("/index-playbook")
@@ -858,7 +975,12 @@ def evaluate_compliance(payload: EvaluateComplianceRequest, contract_id: str):
         "assessments": [],
         "overallRiskScore": 100.0,
         "overallStatus": "Pass",
-        "rejectedCount": 0
+        "rejectedCount": 0,
+        "proposedActions": [],
+        "evaluationRunId": payload.evaluationRunId,
+        "requestedBy": payload.requestedBy,
+        "agentAction": {},
+        "agentGuard": {}
     }
     final_state = risk_compliance_graph.invoke(initial_state)
     return {
@@ -868,5 +990,39 @@ def evaluate_compliance(payload: EvaluateComplianceRequest, contract_id: str):
         "overallStatus": final_state["overallStatus"],
         "assessments": final_state["assessments"],
         "retrievedRulesCount": len(final_state["retrievedRules"]),
-        "rejectedCount": final_state["rejectedCount"]
+        "rejectedCount": final_state["rejectedCount"],
+        "proposedActions": final_state["proposedActions"],
+        "evaluationRunId": final_state["evaluationRunId"],
+        "agentAction": final_state["agentAction"],
+        "agentGuard": final_state["agentGuard"]
     }
+
+
+@app.post("/agentguard/resume")
+def resume_agent_evaluation(payload: AgentResumeRequest):
+    client, database = _agentguard_database()
+    try:
+        try:
+            result = resume_evaluation_run(database, payload.evaluationRunId, payload.actionId, payload.decision, payload.actorId, payload.comment)
+            run = database.agentRuns.find_one({"evaluationRunId": payload.evaluationRunId})
+            resumed_state = resume_evaluation_graph.invoke({**run["state"], "resumeDecision": payload.decision})
+            database.agentRuns.update_one({"evaluationRunId": payload.evaluationRunId}, {"$set": {"state": resumed_state, "status": resumed_state["runStatus"], "updatedAt": _agent_now()}})
+            result["graphResumed"] = resumed_state["resumed"]
+            result["runStatus"] = resumed_state["runStatus"]
+            return result
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+    finally:
+        client.close()
+
+
+@app.post("/agentguard/complete")
+def complete_agent_evaluation(payload: AgentCompleteRequest):
+    client, database = _agentguard_database()
+    try:
+        try:
+            return complete_evaluation_run(database, payload.evaluationRunId, payload.actionId, payload.status)
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+    finally:
+        client.close()
