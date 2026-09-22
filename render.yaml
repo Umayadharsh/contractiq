@@ -11,7 +11,7 @@ services:
       - key: JWT_SECRET
         generateValue: true
       - key: CLIENT_URL
-        sync: false
+        value: https://contractiq-rlqk103ur-umayas-projects-d6c6dda4.vercel.app/
       - key: AI_SERVICE_URL
         sync: false
   - type: web
