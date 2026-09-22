@@ -10,7 +10,18 @@ const AI_SERVICE_URL = process.env.AI_SERVICE_URL || 'http://localhost:8000';
 const aiInternalHeaders = { 'Content-Type': 'application/json', 'X-Internal-Secret': process.env.AI_INTERNAL_SECRET || '' };
 
 function workspaceFor(req) {
-  return req.query.workspaceId || req.body.workspaceId || req.user.id;
+  if (!req.user || typeof req.user !== 'object' || !req.user.id) {
+    const error = new Error('Authentication required');
+    error.statusCode = 401;
+    throw error;
+  }
+  const workspaceId = req.query?.workspaceId || req.body?.workspaceId || req.user.id;
+  if (!workspaceId) {
+    const error = new Error('A valid workspace is required for this request');
+    error.statusCode = 400;
+    throw error;
+  }
+  return workspaceId;
 }
 
 async function requireWorkspace(req, workspaceId) {
