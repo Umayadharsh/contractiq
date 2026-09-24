@@ -820,7 +820,13 @@ def compute_risk_score_node(state: RiskComplianceState) -> dict[str, Any]:
                 score -= 5.0
 
     final_score = max(0.0, min(100.0, score))
-    if final_score >= 85.0:
+
+    has_risk = any(
+        item.get("riskFlag") in ["Non-Compliant", "Deviation", "Warning"]
+        for item in assessments
+    )
+
+    if not has_risk and final_score >= 85.0:
         status = "Pass"
     elif final_score >= 60.0:
         status = "Warning"
