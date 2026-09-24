@@ -24,6 +24,10 @@ load_dotenv()
 
 app = FastAPI(title="ContractIQ AI Service")
 _gemini_client_instance: genai.Client | None = None
+# Explicit HTTP timeout for Gemini calls (milliseconds). Without this, a stalled
+# Gemini request can hang indefinitely and cause upstream timeouts (e.g. the
+# backend's undici default 300s headersTimeout -> "fetch failed").
+GEMINI_REQUEST_TIMEOUT_MS = 120_000
 INVALID_PLACEHOLDERS = {
     "n/a",
     "na",
@@ -215,7 +219,10 @@ def _gemini_client() -> genai.Client:
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         raise HTTPException(status_code=503, detail="GEMINI_API_KEY is not configured for AI operations.")
-    _gemini_client_instance = genai.Client(api_key=api_key)
+    _gemini_client_instance = genai.Client(
+        api_key=api_key,
+        http_options=types.HttpOptions(timeout=GEMINI_REQUEST_TIMEOUT_MS),
+    )
     return _gemini_client_instance
 
 

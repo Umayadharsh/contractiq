@@ -124,15 +124,21 @@ router.post('/', allowRoles('Admin', 'Reviewer'), upload.single('file'), async (
         clauseCount: extraction.clauses?.length || 0,
       });
     } catch (error) {
+      const cause = error?.cause;
+      const errorCode = error?.code || cause?.code || cause?.name || error?.name || 'UNKNOWN';
+      const causeSuffix = cause?.code || cause?.name ? ` (${cause.code || cause.name})` : '';
+      const diagnostic = error?.message
+        ? `${error.message}${causeSuffix}`
+        : `Extraction failed [${errorCode}]`;
       contract.status = 'NeedsReview';
-      contract.extractionError = error.message;
+      contract.extractionError = diagnostic;
       contract.rawExtractionOutput = null;
-      contract.extractionLogs = [{ timestamp: new Date().toISOString(), level: 'error', message: error.message }];
+      contract.extractionLogs = [{ timestamp: new Date().toISOString(), level: 'error', message: diagnostic, errorCode }];
       await contract.save();
       await ExtractionLog.create({
         contractId: contract._id,
         level: 'error',
-        message: error.message,
+        message: diagnostic,
         rawOutput: null,
         confidence: 'low',
         needsReview: true,

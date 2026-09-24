@@ -62,17 +62,47 @@ async function extractTextFromFile(file) {
   return '';
 }
 
+// Normalize failures from the /extract fetch so callers can distinguish:
+//  - timeout (AbortError from our AbortController)
+//  - network failure (fetch rejection; retains undici cause code e.g. UND_ERR_HEADERS_TIMEOUT)
+// HTTP errors are not thrown here; they are handled by the response.ok branch downstream.
+function normalizeExtractionError(error, timeoutMs) {
+  if (error?.name === 'AbortError') {
+    const timedOut = new Error(`AI contract extraction timed out after ${timeoutMs / 1000}s.`);
+    timedOut.code = 'EXTRACTION_TIMEOUT';
+    timedOut.cause = error;
+    return timedOut;
+  }
+  const cause = error?.cause;
+  const networkError = new Error(`AI contract extraction request failed: ${error?.message || 'network error'}`);
+  networkError.code = cause?.code || cause?.name || error?.name || 'EXTRACTION_NETWORK_ERROR';
+  networkError.cause = cause || error;
+  return networkError;
+}
+
 export async function extractContractData(contract, file, rawText) {
   const text = sanitizeText(rawText || (await extractTextFromFile(file)));
   if (!text) {
     return { ok: false, reason: 'No contract text could be extracted from the uploaded file.', logs: [{ timestamp: new Date().toISOString(), level: 'warning', message: 'No contract text extracted from upload.' }], clauses: [] };
   }
 
-  const response = await fetch(`${AI_SERVICE_URL}/extract`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text }),
-  });
+  const controller = new AbortController();
+  const timeoutMs = 120_000; // Abort if the AI service does not respond within 120s.
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  let response;
+  try {
+    response = await fetch(`${AI_SERVICE_URL}/extract`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text }),
+      signal: controller.signal,
+    });
+  } catch (error) {
+    throw normalizeExtractionError(error, timeoutMs);
+  } finally {
+    clearTimeout(timeoutId);
+  }
 
   const body = await response.json().catch(() => ({}));
   if (!response.ok) {
