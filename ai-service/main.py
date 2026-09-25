@@ -32,7 +32,7 @@ _gemini_client_instance: genai.Client | None = None
 # Explicit HTTP timeout for Gemini calls (milliseconds). Without this, a stalled
 # Gemini request can hang indefinitely and cause upstream timeouts (e.g. the
 # backend's undici default 300s headersTimeout -> "fetch failed").
-GEMINI_REQUEST_TIMEOUT_MS = 120_000
+GEMINI_REQUEST_TIMEOUT_MS = 25_000
 INVALID_PLACEHOLDERS = {
     "n/a",
     "na",
@@ -226,7 +226,10 @@ def _gemini_client() -> genai.Client:
         raise HTTPException(status_code=503, detail="GEMINI_API_KEY is not configured for AI operations.")
     _gemini_client_instance = genai.Client(
         api_key=api_key,
-        http_options=types.HttpOptions(timeout=GEMINI_REQUEST_TIMEOUT_MS),
+        http_options=types.HttpOptions(
+            timeout=GEMINI_REQUEST_TIMEOUT_MS,
+            retryOptions=types.HttpRetryOptions(attempts=1)
+        ),
     )
     return _gemini_client_instance
 
@@ -437,7 +440,11 @@ def _gemini_response_schema() -> dict[str, Any]:
 
 
 def _is_transient_gemini_error(error: Exception) -> bool:
-    return isinstance(error, genai_errors.APIError) and 500 <= error.code < 600
+    if isinstance(error, genai_errors.APIError) and 500 <= error.code < 600:
+        return True
+    if "timeout" in str(error).lower() or type(error).__name__ in ["TimeoutException", "ReadTimeout", "ConnectTimeout"]:
+        return True
+    return False
 
 
 def _extract_with_llm(raw_text: str, validation_error: str | None = None) -> dict[str, Any]:

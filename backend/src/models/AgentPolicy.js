@@ -15,7 +15,7 @@ const actionSchema = new mongoose.Schema({
 
 const approvalSchema = new mongoose.Schema({
   required: { type: Boolean, default: false },
-  approverRoles: [{ type: String, enum: ['Admin', 'Reviewer', 'Viewer'] }],
+  approverRoles: { type: [{ type: String, enum: ['Admin', 'Reviewer', 'Viewer'] }], default: ['Reviewer'] },
   minApprovals: { type: Number, default: 1, min: 1 },
 }, { _id: false });
 

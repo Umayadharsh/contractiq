@@ -76,6 +76,19 @@ router.post('/:id/evaluate-compliance', async (req, res, next) => {
     });
     const body = await response.json().catch(() => ({}));
     if (!response.ok) return res.status(response.status).json({ message: body?.detail || body?.message || 'Compliance evaluation failed' });
+
+    contract.complianceReport = {
+      overallRiskScore: body.overallRiskScore,
+      overallStatus: body.overallStatus,
+      assessments: body.assessments,
+      retrievedRulesCount: body.retrievedRulesCount,
+      rejectedCount: body.rejectedCount,
+      proposedActions: body.proposedActions,
+      evaluationRunId: body.evaluationRunId
+    };
+    contract.status = 'Reviewed';
+    await contract.save();
+
     if (body.agentGuard?.actionStatus === 'approved') {
       const action = await AgentAction.findOne({ actionId: body.agentGuard.actionId });
       if (!action) return res.status(500).json({ message: 'AgentGuard action record was not found.' });
@@ -101,7 +114,8 @@ router.post('/', allowRoles('Admin', 'Reviewer'), upload.single('file'), async (
 
     try {
       const extraction = await extractContractData(contract, req.file, req.body.rawText || req.body.text);
-      contract.status = extraction.ok ? 'Reviewed' : 'NeedsReview';
+      const isCompleteFailure = !extraction.ok && extraction.clauses.length === 0 && (!extraction.extractedFields || Object.keys(extraction.extractedFields).length === 0);
+      contract.status = extraction.ok ? 'Reviewed' : (isCompleteFailure ? 'Failed' : 'NeedsReview');
       contract.extractionError = extraction.ok ? '' : extraction.reason;
       contract.rawExtractionOutput = extraction.rawOutput || null;
       contract.extractionLogs = extraction.logs || [];
@@ -130,7 +144,7 @@ router.post('/', allowRoles('Admin', 'Reviewer'), upload.single('file'), async (
       const diagnostic = error?.message
         ? `${error.message}${causeSuffix}`
         : `Extraction failed [${errorCode}]`;
-      contract.status = 'NeedsReview';
+      contract.status = 'Failed';
       contract.extractionError = diagnostic;
       contract.rawExtractionOutput = null;
       contract.extractionLogs = [{ timestamp: new Date().toISOString(), level: 'error', message: diagnostic, errorCode }];

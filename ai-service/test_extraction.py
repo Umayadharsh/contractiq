@@ -244,3 +244,23 @@ def test_search_clauses_bypasses_rrf_when_disabled(monkeypatch):
 
     assert results == vector_results + keyword_results[:2]
     assert len(results) == 8
+
+
+def test_extract_retries_timeout_error_then_fails(monkeypatch):
+    class TimeoutException(Exception): pass
+    class FakeModels:
+        calls = 0
+        def generate_content(self, **_kwargs):
+            self.calls += 1
+            raise TimeoutException('Connection timed out')
+
+    models = FakeModels()
+    monkeypatch.setattr(main, '_gemini_client', lambda: type('Client', (), {'models': models})())
+    monkeypatch.setattr(main.time, 'sleep', lambda _delay: None)
+    monkeypatch.setattr(main.random, 'uniform', lambda _start, _end: 0)
+
+    response = client.post('/extract', json={'text': 'dummy contract'})
+
+    assert response.status_code == 503
+    assert models.calls == 3
+    assert 'Gemini extraction service is unavailable' in response.json()['detail']['message']

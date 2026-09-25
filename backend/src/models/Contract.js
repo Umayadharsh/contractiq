@@ -5,7 +5,7 @@ const contractSchema = new mongoose.Schema({
   counterparty: { type: String, required: true, trim: true },
   uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   fileUrl: { type: String, required: true },
-  status: { type: String, enum: ['Uploaded', 'Processing', 'Reviewed', 'NeedsReview'], default: 'Uploaded' },
+  status: { type: String, enum: ['Uploaded', 'Processing', 'Reviewed', 'NeedsReview', 'Failed'], default: 'Uploaded' },
   workspaceId: { type: String, required: true, trim: true },
   extractedFields: { type: mongoose.Schema.Types.Mixed, default: {} },
   extractionError: { type: String, default: '' },

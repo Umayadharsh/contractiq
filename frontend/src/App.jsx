@@ -34,7 +34,7 @@ function App() {
     policyId: '', name: '', description: '', priority: 0, decision: 'escalate',
     event: 'compliance_evaluation_completed', actionType: 'update_contract',
     riskFlags: 'Non-Compliant,Deviation', severities: 'Major', ruleIds: '', categories: '',
-    approverRoles: 'Admin', isActive: true,
+    approverRoles: 'Reviewer', isActive: true,
   })
 
   // Playbook Form State
@@ -87,7 +87,7 @@ function App() {
 
   function resetPolicyForm() {
     setEditingPolicyId(null)
-    setPolicyForm({ policyId: '', name: '', description: '', priority: 0, decision: 'escalate', event: 'compliance_evaluation_completed', actionType: 'update_contract', riskFlags: 'Non-Compliant,Deviation', severities: 'Major', ruleIds: '', categories: '', approverRoles: 'Admin', isActive: true })
+    setPolicyForm({ policyId: '', name: '', description: '', priority: 0, decision: 'escalate', event: 'compliance_evaluation_completed', actionType: 'update_contract', riskFlags: 'Non-Compliant,Deviation', severities: 'Major', ruleIds: '', categories: '', approverRoles: 'Reviewer', isActive: true })
   }
 
   function startEditingPolicy(policy) {
@@ -139,6 +139,7 @@ function App() {
     const result = await response.json()
     setLoading(false)
     if (!response.ok) return setMessage(result.message)
+    
     localStorage.setItem('contractiq-session', JSON.stringify(result))
     setSession(result)
   }
@@ -235,6 +236,7 @@ function App() {
     if (!response.ok) return setMessage(result.message || 'Compliance evaluation failed.')
     setMessage('Risk compliance evaluation complete.')
     loadContracts()
+    loadPendingActions()
   }
 
   function selectContract(contractId) {
@@ -274,6 +276,11 @@ function App() {
               {mode === 'register' && <input name="name" placeholder="Full name" required />}
               <input name="email" type="email" placeholder="Email address" required />
               <input name="password" type="password" placeholder="Password (8+ characters)" minLength="8" required />
+              <select name="selectedRole" required>
+                <option value="Viewer">Viewer</option>
+                <option value="Reviewer">Reviewer</option>
+                <option value="Admin">Admin</option>
+              </select>
               <button disabled={loading}>{loading ? 'Working...' : mode === 'login' ? 'Sign in' : 'Create account'}</button>
             </form>
             {message && <p className="error">{message}</p>}
@@ -363,8 +370,34 @@ function App() {
         </section>
       ) : activeTab === 'pending' ? (
         <section className="content-grid"><div className="table-panel"><div className="section-heading"><div><p className="eyebrow">AGENTGUARD WORKFLOW</p><h2>Pending approval</h2></div></div>
-          {pendingActions.length ? <div className="table-wrap"><table><thead><tr><th>Contract</th><th>Action</th><th>Policy</th><th>Reason</th><th>Risk</th><th>Decision</th></tr></thead><tbody>
-            {pendingActions.map((action) => <tr key={action._id}><td>{action.contractId?.title || action.contractId}</td><td>{action.type}</td><td>{action.policyId} v{action.policyVersion}</td><td>{action.proposal?.reason}</td><td>{(action.proposal?.riskAssessmentIds || []).join(', ') || 'None'}</td><td><button className="text-button" onClick={() => decideAgentAction(action._id, 'approve')}>Approve</button><button className="text-button danger" onClick={() => decideAgentAction(action._id, 'reject')}>Reject</button></td></tr>)}
+          {pendingActions.length ? <div className="table-wrap"><table><thead><tr><th>Contract</th><th>Action</th><th>Proposed by</th><th>Status</th><th>Approver</th><th>Decision</th></tr></thead><tbody>
+            {pendingActions.map((action) => {
+              const isProposer = String(action.proposal?.proposedBy) === String(session.user.id);
+              const allowedRoles = action.policySnapshot?.approval?.approverRoles || [];
+              const isAuthorized = allowedRoles.includes(session.user.role);
+              const canDecide = isAuthorized && !isProposer;
+              return (
+                <tr key={action._id}>
+                  <td>{action.contractId?.title || action.contractId}</td>
+                  <td>{action.type}</td>
+                  <td>{action.proposal?.proposedBy || 'Unknown'}</td>
+                  <td>{action.status}</td>
+                  <td>{allowedRoles.join(', ') || 'None'}</td>
+                  <td>
+                    {canDecide ? (
+                      <>
+                        <button className="text-button" onClick={() => decideAgentAction(action._id, 'approve')}>Approve</button>
+                        <button className="text-button danger" onClick={() => decideAgentAction(action._id, 'reject')}>Reject</button>
+                      </>
+                    ) : (
+                      <span className="muted" style={{fontSize:'12px'}}>
+                        {isProposer ? 'You cannot approve or reject your own action.' : 'You are not authorized to approve or reject this action.'}
+                      </span>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody></table></div> : <div className="empty"><strong>No actions await approval.</strong></div>}
         </div></section>
       ) : activeTab === 'playbook' && session.user.role === 'Admin' ? (

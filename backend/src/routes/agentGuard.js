@@ -7,7 +7,7 @@ import { allowRoles, requireAuth } from '../middleware/auth.js';
 
 const router = Router();
 const AI_SERVICE_URL = process.env.AI_SERVICE_URL || 'http://localhost:8000';
-const aiInternalHeaders = { 'Content-Type': 'application/json', 'X-Internal-Secret': process.env.AI_INTERNAL_SECRET || '' };
+const aiInternalHeaders = { 'Content-Type': 'application/json', 'x-internal-secret': process.env.AI_INTERNAL_SECRET || '' };
 
 function workspaceFor(req) {
   if (!req.user || typeof req.user !== 'object' || !req.user.id) {
@@ -60,7 +60,7 @@ router.post('/policies', allowRoles('Admin'), async (req, res, next) => {
   try {
     const workspaceId = workspaceFor(req);
     await requireWorkspace(req, workspaceId);
-    const { policyId, name, description, priority, trigger, decision, action, approval, version } = req.body;
+    if (req.body.approval && Array.isArray(req.body.approval.approverRoles)) { req.body.approval.approverRoles = req.body.approval.approverRoles.filter(role => role !== 'Viewer'); } const { policyId, name, description, priority, trigger, decision, action, approval, version } = req.body;
     if (!policyId || !name || !description || !action?.type || !decision || !trigger) {
       return res.status(400).json({ message: 'policyId, name, description, trigger, decision, and action.type are required.' });
     }
@@ -86,7 +86,7 @@ router.put('/policies/:id', allowRoles('Admin'), async (req, res, next) => {
     const policy = await AgentPolicy.findOne({ _id: req.params.id, workspaceId: workspaceFor(req) });
     if (!policy) return res.status(404).json({ message: 'AgentGuard policy not found' });
     await requireWorkspace(req, policy.workspaceId);
-    const fields = ['name', 'description', 'priority', 'trigger', 'decision', 'action', 'approval', 'isActive'];
+    if (req.body.approval && Array.isArray(req.body.approval.approverRoles)) { req.body.approval.approverRoles = req.body.approval.approverRoles.filter(role => role !== 'Viewer'); } const fields = ['name', 'description', 'priority', 'trigger', 'decision', 'action', 'approval', 'isActive'];
     for (const field of fields) if (req.body[field] !== undefined) policy[field] = req.body[field];
     policy.version += 1;
     policy.updatedBy = req.user.id;
