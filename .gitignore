@@ -2,3 +2,4 @@ node_modules/
 .vercel
 ai-service/.env
 ai-service/__pycache__/
+backend/.env

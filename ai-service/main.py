@@ -23,6 +23,11 @@ from evaluator import complete_evaluation_run, evaluate, resume_evaluation_run
 load_dotenv()
 
 app = FastAPI(title="ContractIQ AI Service")
+
+@app.get("/health")
+def health_check():
+    return {"status": "ok"}
+
 _gemini_client_instance: genai.Client | None = None
 # Explicit HTTP timeout for Gemini calls (milliseconds). Without this, a stalled
 # Gemini request can hang indefinitely and cause upstream timeouts (e.g. the
@@ -807,6 +812,11 @@ def compare_clauses_node(state: RiskComplianceState) -> dict[str, Any]:
 
 def compute_risk_score_node(state: RiskComplianceState) -> dict[str, Any]:
     assessments = state.get("assessments", [])
+    clauses = state.get("clauses", [])
+
+    if not clauses:
+        return {"overallRiskScore": 0.0, "overallStatus": "NeedsReview"}
+
     score = 100.0
 
     for item in assessments:
@@ -860,6 +870,9 @@ def store_result_node(state: RiskComplianceState) -> dict[str, Any]:
 
 
 def propose_action_node(state: RiskComplianceState) -> dict[str, Any]:
+    if not state.get("clauses", []):
+        return {"proposedActions": [], "agentAction": {}, "agentGuard": {}}
+
     evaluation_run_id = state.get("evaluationRunId")
     rule_categories = {rule.get("ruleId"): rule.get("category") for rule in state.get("retrievedRules", [])}
     policy_assessments = [

@@ -31,6 +31,9 @@ app.use('/api/contracts', contractRoutes);
 app.use('/api/playbooks', playbookRoutes);
 app.use('/api/agentguard', agentGuardRoutes);
 app.use((error, _req, res, _next) => {
+  if (error.name === 'CastError' && error.kind === 'ObjectId') {
+    return res.status(400).json({ message: 'Invalid ID format' });
+  }
   const status = error.code === 'LIMIT_FILE_SIZE' ? 413 : error.statusCode || 500;
   if (status >= 500) {
     console.error('[ErrorHandler] Unhandled error:', { name: error.name, message: error.message, stack: error.stack });
@@ -43,6 +46,7 @@ app.use((error, _req, res, _next) => {
   res.status(status).json({ message });
 });
 
+app.listen(port, () => console.log(`Backend listening on port ${port}`));
+
 mongoose.connect(process.env.MONGO_URI)
-  .then(() => app.listen(port, () => console.log(`Backend listening on port ${port}`)))
-  .catch((error) => { console.error('MongoDB connection failed:', error.message); process.exit(1); });
+  .catch((error) => { console.error('MongoDB connection failed:', error.message); });

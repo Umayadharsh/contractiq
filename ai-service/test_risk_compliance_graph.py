@@ -117,7 +117,7 @@ def test_5_missing_citation_rejection():
     # Force a raw invalid assessment with fake citedRuleId
     rules = [MOCK_RULE_1]
     valid_rule_map = {r["ruleId"]: r for r in rules}
-    
+
     invalid_raw = {
         "clauseId": "c1",
         "riskFlag": "Non-Compliant",
@@ -138,7 +138,7 @@ def test_6_deterministic_risk_scoring():
     state_a: RiskComplianceState = {
         "contractId": "c1",
         "workspaceId": "w1",
-        "clauses": [],
+        "clauses": [{"id": "dummy"}],
         "retrievedRules": [],
         "assessments": [
             {"clauseId": "c1", "riskFlag": "Non-Compliant", "severity": "Critical", "reason": "r1", "citedRuleId": "RULE-LIAB-01", "citedClauseText": "text1"},
@@ -157,7 +157,7 @@ def test_6_deterministic_risk_scoring():
     state_b: RiskComplianceState = {
         "contractId": "c1",
         "workspaceId": "w1",
-        "clauses": [],
+        "clauses": [{"id": "dummy"}],
         "retrievedRules": [],
         "assessments": [],
         "overallRiskScore": 100.0,
@@ -168,13 +168,28 @@ def test_6_deterministic_risk_scoring():
     assert res_b["overallRiskScore"] == 100.0
     assert res_b["overallStatus"] == "Pass"
 
+    # Case C: Empty clauses => NeedsReview
+    state_c: RiskComplianceState = {
+        "contractId": "c1",
+        "workspaceId": "w1",
+        "clauses": [],
+        "retrievedRules": [],
+        "assessments": [],
+        "overallRiskScore": 100.0,
+        "overallStatus": "Pass",
+        "rejectedCount": 0,
+    }
+    res_c = compute_risk_score_node(state_c)
+    assert res_c["overallRiskScore"] == 0.0
+    assert res_c["overallStatus"] == "NeedsReview"
+
 
 # Test 7: Result Storage Node Re-validation
 def test_7_result_storage_validation():
     state: RiskComplianceState = {
         "contractId": "c1",
         "workspaceId": "w1",
-        "clauses": [],
+        "clauses": [{"id": "dummy"}],
         "retrievedRules": [MOCK_RULE_1],
         "assessments": [
             {"clauseId": "c1", "riskFlag": "Non-Compliant", "severity": "Critical", "reason": "r1", "citedRuleId": "RULE-LIAB-01", "citedClauseText": "text1"},
@@ -218,8 +233,8 @@ def test_9_workspace_isolation(monkeypatch):
         return []
 
     monkeypatch.setattr("main._search_playbook_rules", mock_db_search)
-    res_a = retrieve_playbook_rules_node({"workspaceId": "workspace_A", "clauses": []})
-    res_b = retrieve_playbook_rules_node({"workspaceId": "workspace_B", "clauses": []})
+    res_a = retrieve_playbook_rules_node({"workspaceId": "workspace_A", "clauses": [{"id": "dummy"}]})
+    res_b = retrieve_playbook_rules_node({"workspaceId": "workspace_B", "clauses": [{"id": "dummy"}]})
 
     assert len(res_a["retrievedRules"]) == 1
     assert len(res_b["retrievedRules"]) == 0
