@@ -16,7 +16,7 @@ services:
       - key: AI_SERVICE_URL
         sync: false
       - key: AI_INTERNAL_SECRET
-        sync: false
+        value: shared-internal-secret
   - type: web
     name: contractiq-ai-service
     runtime: python
@@ -36,4 +36,4 @@ services:
       - key: GEMINI_EMBEDDING_MODEL
         value: gemini-embedding-2
       - key: AI_INTERNAL_SECRET
-        sync: false
+        value: shared-internal-secret
