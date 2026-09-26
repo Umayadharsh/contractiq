@@ -596,32 +596,15 @@ def extract_contract(payload: ExtractionRequest):
                 continue
             return _serialize_extraction(validated)
         except ValidationError as exc:
-            last_error = exc.errors()
+            import json
+            last_error = json.loads(exc.json())
             continue
         except ValueError as exc:
             last_error = str(exc)
             continue
         except HTTPException:
             raise
-        except Exception as exc:
-            # TEMPORARY DIAGNOSTIC (2026-09-26): /extract only handled
-            # ValidationError and ValueError, so any other exception type escaped
-            # as Starlette's bare "Internal Server Error" with no traceback in
-            # the response and no clue in the logs. Surface it, then replace this
-            # with the real fix once the cause is known.
-            import traceback
 
-            formatted = traceback.format_exc()
-            print(f"/extract unhandled {type(exc).__name__}: {exc}\n{formatted}", flush=True)
-            raise HTTPException(
-                status_code=500,
-                detail={
-                    "message": "Unhandled extraction error (diagnostic).",
-                    "error_type": type(exc).__name__,
-                    "error": str(exc),
-                    "traceback": formatted.splitlines()[-30:],
-                },
-            ) from exc
     raise HTTPException(
         status_code=422,
         detail={
