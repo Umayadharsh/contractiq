@@ -4,10 +4,11 @@ import AgentAction from '../models/AgentAction.js';
 import WorkspaceMembership from '../models/WorkspaceMembership.js';
 import { executeAgentAction } from '../services/agentActionExecutor.js';
 import { allowRoles, requireAuth } from '../middleware/auth.js';
+import { attachDefaultWorkspace } from '../utils/workspace.js';
 
 const router = Router();
 const AI_SERVICE_URL = process.env.AI_SERVICE_URL || 'http://localhost:8000';
-const aiInternalHeaders = { 'Content-Type': 'application/json', 'x-internal-secret': process.env.AI_INTERNAL_SECRET || '' };
+const aiInternalHeaders = { 'Content-Type': 'application/json', 'X-Internal-Secret': process.env.AI_INTERNAL_SECRET || '' };
 
 function workspaceFor(req) {
   if (!req.user || typeof req.user !== 'object' || !req.user.id) {
@@ -15,7 +16,11 @@ function workspaceFor(req) {
     error.statusCode = 401;
     throw error;
   }
-  const workspaceId = req.query?.workspaceId || req.body?.workspaceId || req.user.id;
+  // Falls back to the caller's default workspace (their most recent membership)
+  // so a member account reaches the workspace that actually holds the shared
+  // policies and pending actions instead of its own empty personal workspace.
+  // requireWorkspace below remains the sole authoriser and is unchanged.
+  const workspaceId = req.query?.workspaceId || req.body?.workspaceId || req.defaultWorkspaceId || req.user.id;
   if (!workspaceId) {
     const error = new Error('A valid workspace is required for this request');
     error.statusCode = 400;
@@ -35,6 +40,7 @@ async function requireWorkspace(req, workspaceId) {
 }
 
 router.use(requireAuth);
+router.use(attachDefaultWorkspace());
 
 router.get('/policies', allowRoles('Admin'), async (req, res, next) => {
   try {
@@ -114,7 +120,10 @@ router.post('/members', allowRoles('Admin'), async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
-router.get('/pending', async (req, res, next) => {
+// Pending approval requests are Admin and Reviewer work. A Viewer is refused
+// here rather than being handed an empty list, so the refusal is a real 403 on
+// the API and not just an empty table in the UI.
+router.get('/pending', allowRoles('Admin', 'Reviewer'), async (req, res, next) => {
   try {
     const workspaceId = workspaceFor(req);
     await requireWorkspace(req, workspaceId);
@@ -143,7 +152,10 @@ router.get('/pending', async (req, res, next) => {
   }
 });
 
-router.post('/actions/:id/approve', async (req, res, next) => {
+// allowRoles is a first, explicit gate: a Viewer gets 403 here without the
+// request ever reaching the maker-checker checks below, which stay exactly as
+// they were and remain the authoritative decision for Admin and Reviewer.
+router.post('/actions/:id/approve', allowRoles('Admin', 'Reviewer'), async (req, res, next) => {
   try {
     const action = await AgentAction.findOne({ _id: req.params.id, workspaceId: workspaceFor(req) });
     if (!action) return res.status(404).json({ message: 'AgentGuard action not found' });
@@ -161,7 +173,7 @@ router.post('/actions/:id/approve', async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
-router.post('/actions/:id/reject', async (req, res, next) => {
+router.post('/actions/:id/reject', allowRoles('Admin', 'Reviewer'), async (req, res, next) => {
   try {
     const action = await AgentAction.findOne({ _id: req.params.id, workspaceId: workspaceFor(req) });
     if (!action) return res.status(404).json({ message: 'AgentGuard action not found' });

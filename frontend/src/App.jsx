@@ -81,8 +81,13 @@ function App() {
   }
 
   async function loadPendingActions() {
+    // The API answers 403 for a Viewer, and a Viewer has no pending queue to
+    // show, so the request is not made at all. This is a courtesy only: the
+    // server refuses it either way.
+    if (session.user.role === 'Viewer') return setPendingActions([])
     const response = await fetch(`${API_URL}/api/agentguard/pending`, { headers: { Authorization: `Bearer ${session.token}` } })
     if (response.ok) setPendingActions(await response.json())
+    else setPendingActions([])
   }
 
   function resetPolicyForm() {
@@ -124,6 +129,10 @@ function App() {
     if (!response.ok) return setMessage((await response.json()).message || 'AgentGuard action failed')
     setMessage(`Action ${decision}d successfully.`)
     loadPendingActions()
+    // Approval changes what each role may see, so the contract list is refetched
+    // rather than patched: a Reviewer's list loses the settled contract and a
+    // Viewer picks it up on their next load.
+    loadContracts()
   }
 
   async function submitAuth(event) {
@@ -158,7 +167,15 @@ function App() {
     if (!response.ok) return setMessage(result.message)
     event.currentTarget.reset()
     setMessage('Contract uploaded successfully.')
-    loadContracts()
+    // The API scopes a Reviewer's list to contracts that have a pending approval
+    // request, and a brand new upload has none yet -- so refetching here would
+    // not return it, the detail panel would never render, and the Evaluate
+    // control would be unreachable: a Reviewer could never evaluate their own
+    // upload. The upload result is therefore shown directly. This is not a
+    // filter -- nothing is hidden that the API returned, and the next real fetch
+    // replaces this with the server's authoritative answer.
+    setContracts((previous) => [result, ...previous.filter((contract) => contract._id !== result._id)])
+    setSelectedContractId(result._id)
   }
 
   function resetRuleForm() {
@@ -257,6 +274,27 @@ function App() {
   const extractedFields = selectedContract?.extractedFields || {}
   const complianceReport = selectedContract?.complianceReport || null
 
+  // The backend already returns only the contracts this role may see, so this
+  // is labelling for whatever arrived -- not a filter. Nothing is hidden here
+  // that the API did not withhold.
+  const contractListMeta = {
+    Admin: {
+      heading: 'All contracts',
+      note: 'Every contract in this workspace, whatever its status.',
+      empty: 'No contracts in this workspace yet.',
+    },
+    Reviewer: {
+      heading: 'Pending review',
+      note: 'Contracts with an approval request waiting for a decision.',
+      empty: 'Nothing is waiting for review.',
+    },
+    Viewer: {
+      heading: 'Approved contracts',
+      note: 'Contracts that have completed approval.',
+      empty: 'No contracts have been approved yet.',
+    },
+  }[session?.user?.role] || { heading: 'Contracts', note: '', empty: 'No contracts available.' }
+
   if (!session) {
     return (
       <main className="auth-shell">
@@ -276,11 +314,23 @@ function App() {
               {mode === 'register' && <input name="name" placeholder="Full name" required />}
               <input name="email" type="email" placeholder="Email address" required />
               <input name="password" type="password" placeholder="Password (8+ characters)" minLength="8" required />
-              <select name="selectedRole" required>
-                <option value="Viewer">Viewer</option>
-                <option value="Reviewer">Reviewer</option>
-                <option value="Admin">Admin</option>
-              </select>
+              {/* Login must offer every role so an existing Admin or Reviewer can
+                  sign in with the role it actually holds. Registration cannot
+                  offer a choice: the API assigns Viewer to every self-registered
+                  account and ignores selectedRole outright (see
+                  src/routes/auth.js), so an Admin or Reviewer option here could
+                  only ever produce a Viewer. */}
+              {mode === 'register' ? (
+                <select key={mode} name="selectedRole" defaultValue="Viewer" required>
+                  <option value="Viewer">Viewer</option>
+                </select>
+              ) : (
+                <select key={mode} name="selectedRole" defaultValue="Viewer" required>
+                  <option value="Viewer">Viewer</option>
+                  <option value="Reviewer">Reviewer</option>
+                  <option value="Admin">Admin</option>
+                </select>
+              )}
               <button disabled={loading}>{loading ? 'Working...' : mode === 'login' ? 'Sign in' : 'Create account'}</button>
             </form>
             {message && <p className="error">{message}</p>}
@@ -320,9 +370,11 @@ function App() {
               ⚙️ AgentGuard Policies
             </button>
           )}
-          <button className={`outline ${activeTab === 'pending' ? 'active' : ''}`} onClick={() => setActiveTab('pending')}>
-            ⏳ Pending Approval ({pendingActions.length})
-          </button>
+          {session.user.role !== 'Viewer' && (
+            <button className={`outline ${activeTab === 'pending' ? 'active' : ''}`} onClick={() => setActiveTab('pending')}>
+              ⏳ Pending Approval ({pendingActions.length})
+            </button>
+          )}
           <span>
             {session.user.name} · <strong>{session.user.role}</strong>
           </span>
@@ -368,7 +420,7 @@ function App() {
             </form>
           </aside>
         </section>
-      ) : activeTab === 'pending' ? (
+      ) : activeTab === 'pending' && session.user.role !== 'Viewer' ? (
         <section className="content-grid"><div className="table-panel"><div className="section-heading"><div><p className="eyebrow">AGENTGUARD WORKFLOW</p><h2>Pending approval</h2></div></div>
           {pendingActions.length ? <div className="table-wrap"><table><thead><tr><th>Contract</th><th>Action</th><th>Proposed by</th><th>Status</th><th>Approver</th><th>Decision</th></tr></thead><tbody>
             {pendingActions.map((action) => {
@@ -541,9 +593,10 @@ function App() {
               <div className="section-heading">
                 <div>
                   <p className="eyebrow">{contracts.length} DOCUMENTS</p>
-                  <h2>All contracts</h2>
+                  <h2>{contractListMeta.heading}</h2>
+                  <p className="muted">{contractListMeta.note}</p>
                 </div>
-                <span className="status-dot">● Live</span>
+                <span className="status-dot">● {session.user.role} view</span>
               </div>
               {contracts.length ? (
                 <div className="table-wrap">
@@ -607,8 +660,14 @@ function App() {
                 </div>
               ) : (
                 <div className="empty">
-                  <strong>Your workspace is clear.</strong>
-                  <span>Upload your first contract to begin.</span>
+                  <strong>{contractListMeta.empty}</strong>
+                  <span>
+                    {session.user.role === 'Viewer'
+                      ? 'Approved contracts appear here as soon as a Reviewer approves them.'
+                      : session.user.role === 'Reviewer'
+                      ? 'Upload a contract and run a compliance evaluation to raise an approval request.'
+                      : 'Upload your first contract to begin.'}
+                  </span>
                 </div>
               )}
             </div>
@@ -651,13 +710,17 @@ function App() {
                       📄 View Original Document
                     </a>
                   )}
-                  <button
-                    className="outline"
-                    disabled={evaluating}
-                    onClick={() => triggerComplianceEvaluation(selectedContract._id)}
-                  >
-                    {evaluating ? 'Evaluating LangGraph...' : '🛡️ Evaluate Playbook Risk'}
-                  </button>
+                  {/* Evaluation is an Admin/Reviewer operation; the API refuses a
+                      Viewer with 403, so the control is not offered to one. */}
+                  {session.user.role !== 'Viewer' && (
+                    <button
+                      className="outline"
+                      disabled={evaluating}
+                      onClick={() => triggerComplianceEvaluation(selectedContract._id)}
+                    >
+                      {evaluating ? 'Evaluating LangGraph...' : '🛡️ Evaluate Playbook Risk'}
+                    </button>
+                  )}
                 </div>
               </div>
 

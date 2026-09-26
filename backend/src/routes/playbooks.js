@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import PlaybookRule from '../models/PlaybookRule.js';
 import { allowRoles, requireAuth } from '../middleware/auth.js';
+import { resolveWorkspace } from '../utils/workspace.js';
 
 const router = Router();
 const AI_SERVICE_URL = process.env.AI_SERVICE_URL || 'http://localhost:8000';
@@ -34,7 +35,7 @@ router.use(requireAuth);
 // GET /api/playbooks - List rules for current workspace
 router.get('/', async (req, res, next) => {
   try {
-    const workspaceId = req.query.workspaceId || req.user.id;
+    const workspaceId = await resolveWorkspace(req);
     const filter = { workspaceId };
     if (req.query.all !== 'true') {
       filter.isActive = true;
@@ -52,7 +53,7 @@ router.get('/', async (req, res, next) => {
 // GET /api/playbooks/:id - Get single rule by ID
 router.get('/:id', async (req, res, next) => {
   try {
-    const workspaceId = req.query.workspaceId || req.user.id;
+    const workspaceId = await resolveWorkspace(req);
     const rule = await PlaybookRule.findOne({ _id: req.params.id, workspaceId })
       .populate('createdBy', 'name email')
       .populate('updatedBy', 'name email');
@@ -66,7 +67,7 @@ router.get('/:id', async (req, res, next) => {
 // POST /api/playbooks - Create new rule (Admin only)
 router.post('/', allowRoles('Admin'), async (req, res, next) => {
   try {
-    const workspaceId = req.body.workspaceId || req.user.id;
+    const workspaceId = await resolveWorkspace(req);
     const { ruleId, title, category, description, expectedRequirement, severity, fallbackText, isActive } = req.body;
 
     if (!ruleId || !title || !category || !description || !expectedRequirement) {
@@ -102,7 +103,7 @@ router.post('/', allowRoles('Admin'), async (req, res, next) => {
 // PUT /api/playbooks/:id - Update existing rule (Admin only)
 router.put('/:id', allowRoles('Admin'), async (req, res, next) => {
   try {
-    const workspaceId = req.body.workspaceId || req.user.id;
+    const workspaceId = await resolveWorkspace(req);
     const rule = await PlaybookRule.findOne({ _id: req.params.id, workspaceId });
     if (!rule) return res.status(404).json({ message: 'Playbook rule not found' });
 
@@ -128,7 +129,7 @@ router.put('/:id', allowRoles('Admin'), async (req, res, next) => {
 // DELETE /api/playbooks/:id - Delete rule (Admin only)
 router.delete('/:id', allowRoles('Admin'), async (req, res, next) => {
   try {
-    const workspaceId = req.query.workspaceId || req.user.id;
+    const workspaceId = await resolveWorkspace(req);
     const rule = await PlaybookRule.findOneAndDelete({ _id: req.params.id, workspaceId });
     if (!rule) return res.status(404).json({ message: 'Playbook rule not found' });
     syncPlaybookEmbeddings(workspaceId);

@@ -4,7 +4,12 @@
   "type": "module",
   "scripts": {
     "dev": "node --watch src/server.js",
-    "start": "node src/server.js"
+    "start": "node src/server.js",
+    "seed:accounts": "node scripts/seedAccounts.js",
+    "seed:accounts:verify": "node scripts/seedAccounts.js --verify",
+    "users:cleanup": "node scripts/cleanupUsers.js",
+    "users:cleanup:apply": "node scripts/cleanupUsers.js --apply",
+    "users:cleanup:verify": "node scripts/cleanupUsers.js --verify"
   },
   "dependencies": {
     "bcryptjs": "^3.0.2",

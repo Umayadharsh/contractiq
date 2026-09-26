@@ -9,7 +9,8 @@ import { allowRoles, requireAuth } from '../middleware/auth.js';
 import { extractContractData } from '../services/extractionService.js';
 import AgentAction from '../models/AgentAction.js';
 import { executeAgentAction } from '../services/agentActionExecutor.js';
-import WorkspaceMembership from '../models/WorkspaceMembership.js';
+import { resolveWorkspace } from '../utils/workspace.js';
+import { visibleContractFilter } from '../utils/contractVisibility.js';
 
 const router = Router();
 const upload = multer({
@@ -21,13 +22,28 @@ const AI_SERVICE_URL = process.env.AI_SERVICE_URL || 'http://localhost:8000';
 const aiInternalHeaders = { 'Content-Type': 'application/json', 'X-Internal-Secret': process.env.AI_INTERNAL_SECRET || '' };
 
 router.use(requireAuth);
+
 router.get('/', async (req, res, next) => {
-  try { res.json(await Contract.find({ workspaceId: req.query.workspaceId || req.user.id }).populate('uploadedBy', 'name email').sort({ createdAt: -1 })); } catch (error) { next(error); }
+  try {
+    const workspaceId = await resolveWorkspace(req);
+    // The list is filtered here, on the server: an Admin sees every contract, a
+    // Reviewer only what is awaiting approval, a Viewer only what is approved.
+    const visible = await visibleContractFilter(req.user, workspaceId);
+    res.json(await Contract.find({ workspaceId, ...visible }).populate('uploadedBy', 'name email').sort({ createdAt: -1 }));
+  } catch (error) { next(error); }
 });
 
 router.get('/:id', async (req, res, next) => {
   try {
-    const contract = await Contract.findOne({ _id: req.params.id, workspaceId: req.query.workspaceId || req.user.id }).populate('uploadedBy', 'name email');
+    const workspaceId = await resolveWorkspace(req);
+    const visible = await visibleContractFilter(req.user, workspaceId);
+    // Filtering a single read by the same rule stops a Viewer or Reviewer from
+    // reaching a contract they cannot see by guessing its id.
+    // The two conditions are combined with $and rather than spread, because the
+    // visibility filter constrains _id as well: spreading it after `_id` would
+    // replace the id being looked up with the visible-id set, and the route would
+    // return whichever visible contract came first.
+    const contract = await Contract.findOne({ workspaceId, $and: [{ _id: req.params.id }, visible] }).populate('uploadedBy', 'name email');
     if (!contract) return res.status(404).json({ message: 'Contract not found' });
     res.json(contract);
   } catch (error) { next(error); }
@@ -38,7 +54,11 @@ router.post('/:id/ask', async (req, res, next) => {
     if (typeof req.body?.question !== 'string' || req.body.question.trim().length < 3) {
       return res.status(400).json({ message: 'A question with at least 3 characters is required' });
     }
-    const contract = await Contract.findOne({ _id: req.params.id, workspaceId: req.query.workspaceId || req.user.id }).select('_id');
+    const workspaceId = await resolveWorkspace(req);
+    const visible = await visibleContractFilter(req.user, workspaceId);
+    // $and for the same reason as GET /:id -- the visibility filter constrains
+    // _id, so it must not overwrite the id being asked about.
+    const contract = await Contract.findOne({ workspaceId, $and: [{ _id: req.params.id }, visible] }).select('_id');
     if (!contract) return res.status(404).json({ message: 'Contract not found' });
 
     const response = await fetch(`${AI_SERVICE_URL}/contracts/${contract._id}/ask`, {
@@ -52,14 +72,17 @@ router.post('/:id/ask', async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
-router.post('/:id/evaluate-compliance', async (req, res, next) => {
+// Evaluation is what raises the pending approval a Reviewer works from, so it is
+// scoped to the workspace and to the roles that may act on a contract -- but it
+// is deliberately NOT filtered by list visibility. A contract has no action at
+// all until it is first evaluated, so applying the "Reviewer sees only pending"
+// rule here would make the first evaluation impossible: nothing could ever
+// reach a pending state.
+router.post('/:id/evaluate-compliance', allowRoles('Admin', 'Reviewer'), async (req, res, next) => {
   try {
-    const workspaceId = req.query.workspaceId || req.user.id;
+    const workspaceId = await resolveWorkspace(req);
     const contract = await Contract.findOne({ _id: req.params.id, workspaceId });
     if (!contract) return res.status(404).json({ message: 'Contract not found' });
-    if (workspaceId !== req.user.id && !(await WorkspaceMembership.exists({ workspaceId, userId: req.user.id }))) {
-      return res.status(403).json({ message: 'Workspace membership is required for compliance evaluation.' });
-    }
 
     const clauses = await Clause.find({ contractId: contract._id });
     const evaluationRunId = randomUUID();
@@ -108,7 +131,7 @@ router.post('/', allowRoles('Admin', 'Reviewer'), upload.single('file'), async (
       counterparty: req.body.counterparty,
       uploadedBy: req.user.id,
       fileUrl: `/uploads/${req.file.filename}`,
-      workspaceId: req.body.workspaceId || req.user.id,
+      workspaceId: await resolveWorkspace(req),
       status: 'Processing',
     });
 
