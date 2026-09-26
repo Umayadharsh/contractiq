@@ -161,7 +161,7 @@ class ClauseExtraction(BaseModel):
 
 
 class ContractExtraction(BaseModel):
-    parties: list[FieldMetadata] = Field(..., min_length=1)
+    parties: list[FieldMetadata] = Field(default_factory=list)
     contractValue: FieldMetadata | None = None
     startDate: FieldMetadata | None = None
     endDate: FieldMetadata | None = None
@@ -196,10 +196,7 @@ class ContractExtraction(BaseModel):
     @field_validator("parties")
     @classmethod
     def validate_parties(cls, value: list[FieldMetadata]) -> list[FieldMetadata]:
-        cleaned = [party for party in value if party.value and party.value.strip()]
-        if not cleaned:
-            raise ValueError("At least one party is required")
-        return cleaned
+        return [party for party in value if party.value and party.value.strip()]
 
 
 class ExtractionRequest(BaseModel):
