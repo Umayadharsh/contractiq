@@ -12,6 +12,8 @@ from langgraph.graph import StateGraph, END
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, Header, HTTPException
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from google import genai
 from google.genai import errors as genai_errors
 from google.genai import types
@@ -23,6 +25,33 @@ from evaluator import complete_evaluation_run, evaluate, resume_evaluation_run
 load_dotenv()
 
 app = FastAPI(title="ContractIQ AI Service")
+
+# Pydantic v2 stores the original exception object in `ctx` when a validator
+# raises (e.g. ctx={"error": ValueError(...)}). FastAPI's built-in handler hands
+# `exc.errors()` straight to json.dumps, so that ValueError raises
+# "Object of type ValueError is not JSON serializable" while serializing the
+# error response -- turning a client's 422 into a 500 with no usable detail.
+# Coercing every ctx value to str keeps the response valid JSON and 422.
+# Registered once here so it covers every endpoint.
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request, exc):
+    errors = []
+
+    for error in exc.errors():
+        error_copy = dict(error)
+
+        if "ctx" in error_copy:
+            error_copy["ctx"] = {
+                key: str(value)
+                for key, value in error_copy["ctx"].items()
+            }
+
+        errors.append(error_copy)
+
+    return JSONResponse(
+        status_code=422,
+        content={"detail": errors},
+    )
 
 @app.get("/health")
 def health_check():
