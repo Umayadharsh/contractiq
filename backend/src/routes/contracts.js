@@ -208,11 +208,11 @@ console.log("[AUTH DEBUG]", {
 
 triggerN8nWebhook('new-upload', {
   contractId: contract._id.toString(),
-  title: contract.title,
   uploaderEmail: req.user.email,
   extractionUrl: `https://contractiq-4bb0.onrender.com/api/contracts/${contract._id}/evaluate-compliance`,
   authorization: req.headers.authorization,
-  text: extraction.text
+  text: extraction.text,
+  title: contract.title
 });
       return res.status(201).json({
         ...contract.toObject(),
