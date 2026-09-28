@@ -241,6 +241,43 @@ function App() {
     }
   }
 
+  
+  const approveContract = async (id) => {
+    try {
+      const res = await fetch(`${API_URL}/api/contracts/${id}/approve`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${session.token}` }
+      });
+      if (res.ok) {
+        loadContracts();
+        selectContract(id); // Reload the detail panel
+      } else {
+        const body = await res.json();
+        setMessage(body.message || 'Approval failed');
+      }
+    } catch (err) {
+      setMessage(err.message);
+    }
+  };
+
+  const rejectContract = async (id) => {
+    try {
+      const res = await fetch(`${API_URL}/api/contracts/${id}/reject`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${session.token}` }
+      });
+      if (res.ok) {
+        loadContracts();
+        selectContract(id); // Reload the detail panel
+      } else {
+        const body = await res.json();
+        setMessage(body.message || 'Rejection failed');
+      }
+    } catch (err) {
+      setMessage(err.message);
+    }
+  };
+
   async function triggerComplianceEvaluation(contractId) {
     setEvaluating(true)
     setMessage('')
@@ -647,8 +684,10 @@ function App() {
                                 >
                                   {report.overallRiskScore}/100 ({report.overallStatus})
                                 </span>
+                              ) : contract.status === 'Failed' ? (
+                                <span className="muted">Evaluation Failed</span>
                               ) : (
-                                <span className="muted">Not Evaluated</span>
+                                <span className="muted">Waiting for Evaluation</span>
                               )}
                             </td>
                             <td>{new Date(contract.createdAt).toLocaleDateString()}</td>
@@ -726,7 +765,11 @@ function App() {
 
               {complianceReport && (
                 <div className="audit-log risk-banner">
-                  <h3>Risk Compliance Report (LangGraph)</h3>
+                  <h3>Risk Compliance Report</h3>
+                  {!complianceReport ? (
+                    <p><strong>{selectedContract.status === 'Failed' ? 'Evaluation Failed' : 'Waiting for Evaluation'}</strong></p>
+                  ) : (
+                    <>
                   <p>
                     Overall Score: <strong>{complianceReport.overallRiskScore} / 100</strong> — Status:{' '}
                     <strong>{complianceReport.overallStatus}</strong>

@@ -248,4 +248,32 @@ triggerN8nWebhook('new-upload', {
   } catch (error) { next(error); }
 });
 
+router.post('/:id/approve', allowRoles('Admin', 'Reviewer'), async (req, res, next) => {
+  try {
+    const workspaceId = await resolveWorkspace(req);
+    const contract = await Contract.findOne({ _id: req.params.id, workspaceId });
+    if (!contract) return res.status(404).json({ message: 'Contract not found' });
+    if (!contract.complianceReport) {
+      return res.status(403).json({ message: 'Contract must be evaluated before approval.' });
+    }
+    contract.status = 'Approved';
+    await contract.save();
+    res.json(contract);
+  } catch (error) { next(error); }
+});
+
+router.post('/:id/reject', allowRoles('Admin', 'Reviewer'), async (req, res, next) => {
+  try {
+    const workspaceId = await resolveWorkspace(req);
+    const contract = await Contract.findOne({ _id: req.params.id, workspaceId });
+    if (!contract) return res.status(404).json({ message: 'Contract not found' });
+    if (!contract.complianceReport) {
+      return res.status(403).json({ message: 'Contract must be evaluated before rejection.' });
+    }
+    contract.status = 'Rejected';
+    await contract.save();
+    res.json(contract);
+  } catch (error) { next(error); }
+});
+
 export default router;
