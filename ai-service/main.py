@@ -1100,7 +1100,8 @@ def complete_agent_evaluation(payload: AgentCompleteRequest, x_internal_secret: 
         client.close()
 
 @app.get("/diagnostic/gemini")
-from fastapi import Depends\ndef diagnostic_gemini(secret: str = Depends(_require_internal_secret)):
+from fastapi import Depends
+def diagnostic_gemini(secret: str = Depends(_require_internal_secret)):
     import os
     from google import genai
     from google.genai import types
