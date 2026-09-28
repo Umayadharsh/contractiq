@@ -241,11 +241,6 @@ function App() {
     }
   }
 
-  
-  
-
-  
-
   async function triggerComplianceEvaluation(contractId) {
     setEvaluating(true)
     setMessage('')
@@ -255,11 +250,7 @@ function App() {
     })
     const result = await response.json()
     setEvaluating(false)
-    if (!response.ok) {
-      setMessage(result.message || 'Compliance evaluation failed.')
-      loadContracts()
-      return
-    }
+    if (!response.ok) return setMessage(result.message || 'Compliance evaluation failed.')
     setMessage('Risk compliance evaluation complete.')
     loadContracts()
     loadPendingActions()
@@ -380,13 +371,9 @@ function App() {
             </button>
           )}
           {session.user.role !== 'Viewer' && (
-                    <button
-                      className="outline"
-                      disabled={evaluating || complianceReport != null}
-                      onClick={() => triggerComplianceEvaluation(selectedContract._id)}
-                    >
-                      {evaluating ? 'Evaluating...' : selectedContract.status === 'Failed' ? 'Evaluation Failed — Retry' : 'Evaluate'}
-                    </button>
+            <button className={`outline ${activeTab === 'pending' ? 'active' : ''}`} onClick={() => setActiveTab('pending')}>
+              ⏳ Pending Approval ({pendingActions.length})
+            </button>
           )}
           <span>
             {session.user.name} · <strong>{session.user.role}</strong>
@@ -660,10 +647,8 @@ function App() {
                                 >
                                   {report.overallRiskScore}/100 ({report.overallStatus})
                                 </span>
-                              ) : contract.status === 'Failed' ? (
-                                <span className="muted">Evaluation Failed</span>
                               ) : (
-                                <span className="muted">Waiting for Evaluation</span>
+                                <span className="muted">Not Evaluated</span>
                               )}
                             </td>
                             <td>{new Date(contract.createdAt).toLocaleDateString()}</td>
@@ -730,21 +715,18 @@ function App() {
                   {session.user.role !== 'Viewer' && (
                     <button
                       className="outline"
-                      disabled={evaluating || complianceReport != null}
+                      disabled={evaluating}
                       onClick={() => triggerComplianceEvaluation(selectedContract._id)}
                     >
-                      {evaluating ? 'Evaluating...' : selectedContract.status === 'Failed' ? 'Evaluation Failed — Retry' : 'Evaluate'}
+                      {evaluating ? 'Evaluating LangGraph...' : '🛡️ Evaluate Playbook Risk'}
                     </button>
                   )}
                 </div>
               </div>
 
-              <div className="audit-log risk-banner">
-                  <h3>Risk Compliance Report</h3>
-                  {!complianceReport ? (
-                    <p><strong>{selectedContract.status === 'Failed' ? 'Evaluation Failed' : 'Waiting for Evaluation'}</strong></p>
-                  ) : (
-                    <>
+              {complianceReport && (
+                <div className="audit-log risk-banner">
+                  <h3>Risk Compliance Report (LangGraph)</h3>
                   <p>
                     Overall Score: <strong>{complianceReport.overallRiskScore} / 100</strong> — Status:{' '}
                     <strong>{complianceReport.overallStatus}</strong>
@@ -787,28 +769,8 @@ function App() {
                   ) : (
                     <p className="success-text">✅ No playbook rule violations detected.</p>
                   )}
-                  
-                  {session.user.role !== 'Viewer' && (
-                    <div style={{ marginTop: '20px', display: 'flex', gap: '10px' }}>
-                      <button 
-                        className="text-button" 
-                        disabled={!complianceReport?.agentGuard?.actionId || complianceReport.agentGuard.actionStatus !== 'pending_approval' || evaluating || selectedContract.status === 'Approved' || selectedContract.status === 'Rejected' || !complianceReport.agentGuard?.allowedApproverRoles?.includes(session.user.role)}
-                        onClick={() => decideAgentAction(complianceReport.agentGuard.actionId, 'approve')}
-                      >
-                        Approve
-                      </button>
-                      <button 
-                        className="text-button danger" 
-                        disabled={!complianceReport?.agentGuard?.actionId || complianceReport.agentGuard.actionStatus !== 'pending_approval' || evaluating || selectedContract.status === 'Approved' || selectedContract.status === 'Rejected' || !complianceReport.agentGuard?.allowedApproverRoles?.includes(session.user.role)}
-                        onClick={() => decideAgentAction(complianceReport.agentGuard.actionId, 'reject')}
-                      >
-                        Reject
-                      </button>
-                    </div>
-                  )}
-                  </>
-                )}
-              </div>
+                </div>
+              )}
 
               {extractedFields && Object.keys(extractedFields).length > 0 && (
                 <div className="extraction-grid">

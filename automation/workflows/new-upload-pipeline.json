@@ -18,54 +18,21 @@
     },
     {
       "parameters": {
-        "method": "POST",
-        "url": "={{$json.body.extractionUrl}}",
-        "sendBody": true,
-        "bodyParameters": {
-          "parameters": [
-            {
-              "name": "contractId",
-              "value": "={{$json.body.contractId}}"
-            }
-          ]
-        }
-      },
-      "name": "Extract & Evaluate",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 3,
-      "position": [
-        450,
-        300
-      ]
-    },
-    {
-      "parameters": {
-        "subject": "Analysis Ready",
-        "text": "The analysis for contract {{$node[\"Webhook\"].json[\"body\"][\"contractId\"]}} is ready.",
-        "toEmail": "={{$node[\"Webhook\"].json[\"body\"][\"uploaderEmail\"]}}"
+        "subject": "Analysis Ready for {{$json.body.title}}",
+        "text": "The analysis for contract {{$json.body.title}} is ready. Evaluation Result: {{$json.body.evaluationResult.overallRiskScore}}/100 ({{$json.body.evaluationResult.overallStatus}})",
+        "toEmail": "={{$json.body.uploaderEmail}}"
       },
       "name": "Notify Uploader",
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 2,
       "position": [
-        650,
+        450,
         300
       ]
     }
   ],
   "connections": {
     "Webhook": {
-      "main": [
-        [
-          {
-            "node": "Extract & Evaluate",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Extract & Evaluate": {
       "main": [
         [
           {

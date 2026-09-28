@@ -114,7 +114,7 @@ router.post('/:id/ask', async (req, res, next) => {
 router.post('/:id/evaluate-compliance', allowRoles('Admin', 'Reviewer'), async (req, res, next) => {
   try {
     const workspaceId = await resolveWorkspace(req);
-    const contract = await Contract.findOne({ _id: req.params.id, workspaceId });
+    const contract = await Contract.findOne({ _id: req.params.id, workspaceId }).populate('uploadedBy', 'email name');
     if (!contract) return res.status(404).json({ message: 'Contract not found' });
 
     const clauses = await Clause.find({ contractId: contract._id });
@@ -131,7 +131,11 @@ router.post('/:id/evaluate-compliance', allowRoles('Admin', 'Reviewer'), async (
       }),
     });
     const body = await response.json().catch(() => ({}));
-    if (!response.ok) return res.status(response.status).json({ message: body?.detail || body?.message || 'Compliance evaluation failed' });
+    if (!response.ok) {
+        contract.status = 'Failed';
+        await contract.save();
+        return res.status(response.status).json({ message: body?.detail || body?.message || 'Compliance evaluation failed' });
+    }
 
     contract.complianceReport = {
       overallRiskScore: body.overallRiskScore,
@@ -149,6 +153,18 @@ router.post('/:id/evaluate-compliance', allowRoles('Admin', 'Reviewer'), async (
         contract.status = 'Reviewed';
       }
     await contract.save();
+
+    triggerN8nWebhook('new-upload', {
+      contractId: contract._id.toString(),
+      workspaceId: workspaceId.toString(),
+      uploaderEmail: contract.uploadedBy?.email || req.user.email,
+      title: contract.title,
+      authorization: req.headers.authorization,
+      evaluationResult: {
+        overallRiskScore: body.overallRiskScore,
+        overallStatus: body.overallStatus
+      }
+    });
 
     const hasCriticalRisk = body.assessments?.some(a => String(a.severity).toLowerCase() === 'critical' || String(a.riskLevel).toLowerCase() === 'critical' || String(a.status).toLowerCase() === 'critical') || String(body.overallStatus).toLowerCase() === 'critical';
     if (hasCriticalRisk) {
@@ -181,7 +197,7 @@ router.post('/', allowRoles('Admin', 'Reviewer'), upload.single('file'), async (
     try {
       const extraction = await extractContractData(contract, req.file, req.body.rawText || req.body.text);
       const isCompleteFailure = !extraction.ok && extraction.clauses.length === 0 && (!extraction.extractedFields || Object.keys(extraction.extractedFields).length === 0);
-      contract.status = extraction.ok ? 'Reviewed' : (isCompleteFailure ? 'Failed' : 'NeedsReview');
+      contract.status = isCompleteFailure ? 'Failed' : 'Waiting for Evaluation';
       contract.extractionError = extraction.ok ? '' : extraction.reason;
       contract.rawExtractionOutput = extraction.rawOutput || null;
       contract.extractionLogs = extraction.logs || [];
@@ -197,28 +213,6 @@ router.post('/', allowRoles('Admin', 'Reviewer'), upload.single('file'), async (
           needsReview: Boolean(log.needsReview || !extraction.ok),
         })));
       }
-console.log('[n8n] Triggering webhook:', {
-  contractId: contract._id.toString(),
-  uploaderEmail: req.user.email,
-  extractionUrl: `http://localhost:4000/api/contracts/${contract._id}/evaluate-compliance`,
-});
-
-console.log('[n8n] Authorization exists:', Boolean(req.headers.authorization));
-console.log('[n8n] Authorization:', req.headers.authorization);
-
-console.log("[AUTH DEBUG]", {
-  hasAuthorization: Boolean(req.headers.authorization),
-  authorizationPrefix: req.headers.authorization?.slice(0, 20),
-});
-
-triggerN8nWebhook('new-upload', {
-  contractId: contract._id.toString(),
-  uploaderEmail: req.user.email,
-  extractionUrl: `https://contractiq-4bb0.onrender.com/api/contracts/${contract._id}/evaluate-compliance`,
-  authorization: req.headers.authorization,
-  text: extraction.text,
-  title: contract.title
-});
       return res.status(201).json({
         ...contract.toObject(),
         extractedFields: contract.extractedFields || {},
