@@ -140,9 +140,14 @@ router.post('/:id/evaluate-compliance', allowRoles('Admin', 'Reviewer'), async (
       retrievedRulesCount: body.retrievedRulesCount,
       rejectedCount: body.rejectedCount,
       proposedActions: body.proposedActions,
-      evaluationRunId: body.evaluationRunId
+      evaluationRunId: body.evaluationRunId,
+        agentGuard: body.agentGuard
     };
-    contract.status = 'Reviewed';
+    if (body.agentGuard?.actionStatus === 'pending_approval') {
+        contract.status = 'Waiting for Approval';
+      } else {
+        contract.status = 'Reviewed';
+      }
     await contract.save();
 
     const hasCriticalRisk = body.assessments?.some(a => String(a.severity).toLowerCase() === 'critical' || String(a.riskLevel).toLowerCase() === 'critical' || String(a.status).toLowerCase() === 'critical') || String(body.overallStatus).toLowerCase() === 'critical';
@@ -245,34 +250,6 @@ triggerN8nWebhook('new-upload', {
         message: 'Contract uploaded. Extraction needs review.',
       });
     }
-  } catch (error) { next(error); }
-});
-
-router.post('/:id/approve', allowRoles('Admin', 'Reviewer'), async (req, res, next) => {
-  try {
-    const workspaceId = await resolveWorkspace(req);
-    const contract = await Contract.findOne({ _id: req.params.id, workspaceId });
-    if (!contract) return res.status(404).json({ message: 'Contract not found' });
-    if (!contract.complianceReport) {
-      return res.status(403).json({ message: 'Contract must be evaluated before approval.' });
-    }
-    contract.status = 'Approved';
-    await contract.save();
-    res.json(contract);
-  } catch (error) { next(error); }
-});
-
-router.post('/:id/reject', allowRoles('Admin', 'Reviewer'), async (req, res, next) => {
-  try {
-    const workspaceId = await resolveWorkspace(req);
-    const contract = await Contract.findOne({ _id: req.params.id, workspaceId });
-    if (!contract) return res.status(404).json({ message: 'Contract not found' });
-    if (!contract.complianceReport) {
-      return res.status(403).json({ message: 'Contract must be evaluated before rejection.' });
-    }
-    contract.status = 'Rejected';
-    await contract.save();
-    res.json(contract);
   } catch (error) { next(error); }
 });
 

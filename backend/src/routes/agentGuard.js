@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import AgentPolicy from '../models/AgentPolicy.js';
 import AgentAction from '../models/AgentAction.js';
+import Contract from '../models/Contract.js';
 import WorkspaceMembership from '../models/WorkspaceMembership.js';
 import { executeAgentAction } from '../services/agentActionExecutor.js';
 import { allowRoles, requireAuth } from '../middleware/auth.js';
@@ -168,6 +169,7 @@ router.post('/actions/:id/approve', allowRoles('Admin', 'Reviewer'), async (req,
     if (!response.ok) return res.status(response.status).json({ message: result.detail || 'AgentGuard resume failed' });
     const approvedAction = await AgentAction.findOne({ _id: action._id });
     const executed = await executeAgentAction(approvedAction);
+      await Contract.updateOne({ _id: action.contractId }, { $set: { status: 'Approved' } });
     await fetch(`${AI_SERVICE_URL}/agentguard/complete`, { method: 'POST', headers: aiInternalHeaders, body: JSON.stringify({ evaluationRunId: action.evaluationRunId, actionId: action.actionId, status: 'completed' }) });
     res.json({ action: executed, runStatus: 'completed', resumed: true });
   } catch (error) { next(error); }

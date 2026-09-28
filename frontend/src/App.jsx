@@ -242,41 +242,9 @@ function App() {
   }
 
   
-  const approveContract = async (id) => {
-    try {
-      const res = await fetch(`${API_URL}/api/contracts/${id}/approve`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${session.token}` }
-      });
-      if (res.ok) {
-        loadContracts();
-        selectContract(id); // Reload the detail panel
-      } else {
-        const body = await res.json();
-        setMessage(body.message || 'Approval failed');
-      }
-    } catch (err) {
-      setMessage(err.message);
-    }
-  };
+  
 
-  const rejectContract = async (id) => {
-    try {
-      const res = await fetch(`${API_URL}/api/contracts/${id}/reject`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${session.token}` }
-      });
-      if (res.ok) {
-        loadContracts();
-        selectContract(id); // Reload the detail panel
-      } else {
-        const body = await res.json();
-        setMessage(body.message || 'Rejection failed');
-      }
-    } catch (err) {
-      setMessage(err.message);
-    }
-  };
+  
 
   async function triggerComplianceEvaluation(contractId) {
     setEvaluating(true)
