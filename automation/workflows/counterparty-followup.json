@@ -1,0 +1,96 @@
+{
+  "name": "Counterparty Followup",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "counterparty-followup",
+        "httpMethod": "POST",
+        "responseMode": "lastNode"
+      },
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        250,
+        300
+      ],
+      "webhookId": "counterparty-followup-trigger"
+    },
+    {
+      "parameters": {
+        "subject": "Contract Redline Approved",
+        "text": "={{$json.body.emailBody}}",
+        "toEmail": "={{$json.body.counterpartyEmail}}"
+      },
+      "name": "Send Redline Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [
+        450,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "amount": 7,
+        "unit": "days"
+      },
+      "name": "Wait 7 Days",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [
+        650,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "subject": "Follow Up: Contract Redline",
+        "text": "Just following up on the redline we sent 7 days ago.",
+        "toEmail": "={{$node[\"Webhook\"].json[\"body\"][\"counterpartyEmail\"]}}"
+      },
+      "name": "Send Followup",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [
+        850,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Send Redline Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Redline Email": {
+      "main": [
+        [
+          {
+            "node": "Wait 7 Days",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait 7 Days": {
+      "main": [
+        [
+          {
+            "node": "Send Followup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

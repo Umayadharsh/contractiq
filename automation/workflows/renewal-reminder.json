@@ -1,0 +1,75 @@
+{
+  "name": "Renewal Reminder",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "days",
+              "expression": 1
+            }
+          ]
+        }
+      },
+      "name": "Schedule",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [
+        250,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "url": "http://contractiq-guard-api/api/contracts/expiring",
+        "method": "GET"
+      },
+      "name": "Query Expiring Contracts",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [
+        450,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "subject": "Contract Renewal Reminder",
+        "text": "You have contracts expiring in 30/14/7 days.",
+        "toEmail": "admin@example.com"
+      },
+      "name": "Send Reminder",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [
+        650,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Schedule": {
+      "main": [
+        [
+          {
+            "node": "Query Expiring Contracts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Query Expiring Contracts": {
+      "main": [
+        [
+          {
+            "node": "Send Reminder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

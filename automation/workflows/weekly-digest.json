@@ -1,0 +1,105 @@
+{
+  "name": "Weekly Digest",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "weeks",
+              "expression": 1
+            }
+          ]
+        }
+      },
+      "name": "Schedule",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [
+        250,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "url": "http://contractiq-guard-api/api/contracts/stats",
+        "method": "GET"
+      },
+      "name": "Aggregate Stats",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [
+        450,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4",
+        "messages": {
+          "messageValues": [
+            {
+              "content": "=Generate a weekly summary based on these stats: {{$json}}"
+            }
+          ]
+        }
+      },
+      "name": "LLM Summary",
+      "type": "n8n-nodes-base.openAi",
+      "typeVersion": 1,
+      "position": [
+        650,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "subject": "Weekly Contract Digest",
+        "text": "={{$json.message.content}}",
+        "toEmail": "team@example.com"
+      },
+      "name": "Send Digest",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [
+        850,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Schedule": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Stats",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate Stats": {
+      "main": [
+        [
+          {
+            "node": "LLM Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LLM Summary": {
+      "main": [
+        [
+          {
+            "node": "Send Digest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

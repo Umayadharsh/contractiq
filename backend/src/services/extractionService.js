@@ -191,5 +191,6 @@ export async function extractContractData(contract, file, rawText) {
     logs,
     rawOutput: body,
     extractedFields,
+    text,
   };
 }

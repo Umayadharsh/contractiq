@@ -1,0 +1,46 @@
+{
+  "name": "Risk Escalation",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "risk-escalation",
+        "httpMethod": "POST",
+        "responseMode": "lastNode"
+      },
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        250,
+        300
+      ],
+      "webhookId": "risk-escalation-trigger"
+    },
+    {
+      "parameters": {
+        "channel": "#alerts",
+        "text": "=CRITICAL RISK FLAGGED for contract {{$json.body.contractId}}: {{$json.body.riskDetails}}"
+      },
+      "name": "Slack Alert",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2,
+      "position": [
+        450,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Slack Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

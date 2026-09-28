@@ -11,6 +11,7 @@ import AgentAction from '../models/AgentAction.js';
 import { executeAgentAction } from '../services/agentActionExecutor.js';
 import { resolveWorkspace } from '../utils/workspace.js';
 import { visibleContractFilter } from '../utils/contractVisibility.js';
+import { triggerN8nWebhook } from '../utils/n8n.js';
 
 const router = Router();
 const upload = multer({
@@ -30,6 +31,38 @@ router.get('/', async (req, res, next) => {
     // Reviewer only what is awaiting approval, a Viewer only what is approved.
     const visible = await visibleContractFilter(req.user, workspaceId);
     res.json(await Contract.find({ workspaceId, ...visible }).populate('uploadedBy', 'name email').sort({ createdAt: -1 }));
+  } catch (error) { next(error); }
+});
+
+router.get('/expiring', async (req, res, next) => {
+  try {
+    const workspaceId = await resolveWorkspace(req);
+    const contracts = await Contract.find({ workspaceId }).select('title counterparty extractedFields');
+    
+    const now = new Date();
+    const result = contracts.filter(c => {
+      const endDateStr = c.extractedFields?.endDate || c.extractedFields?.['End Date'];
+      if (!endDateStr) return false;
+      const endDate = new Date(endDateStr);
+      if (isNaN(endDate)) return false;
+      
+      const diffDays = Math.ceil((endDate - now) / (1000 * 60 * 60 * 24));
+      return [30, 14, 7].includes(diffDays) || (diffDays <= 30 && diffDays > 0);
+    });
+    
+    res.json(result);
+  } catch (error) { next(error); }
+});
+
+router.get('/stats', async (req, res, next) => {
+  try {
+    const workspaceId = await resolveWorkspace(req);
+    const total = await Contract.countDocuments({ workspaceId });
+    const reviewed = await Contract.countDocuments({ workspaceId, status: 'Reviewed' });
+    const needsReview = await Contract.countDocuments({ workspaceId, status: 'NeedsReview' });
+    const failed = await Contract.countDocuments({ workspaceId, status: 'Failed' });
+    
+    res.json({ total, reviewed, needsReview, failed });
   } catch (error) { next(error); }
 });
 
@@ -112,6 +145,11 @@ router.post('/:id/evaluate-compliance', allowRoles('Admin', 'Reviewer'), async (
     contract.status = 'Reviewed';
     await contract.save();
 
+    const hasCriticalRisk = body.assessments?.some(a => String(a.severity).toLowerCase() === 'critical' || String(a.riskLevel).toLowerCase() === 'critical' || String(a.status).toLowerCase() === 'critical') || String(body.overallStatus).toLowerCase() === 'critical';
+    if (hasCriticalRisk) {
+      triggerN8nWebhook('risk-escalation', { contractId: contract._id, riskDetails: 'Critical risk flagged in compliance evaluation.' });
+    }
+
     if (body.agentGuard?.actionStatus === 'approved') {
       const action = await AgentAction.findOne({ actionId: body.agentGuard.actionId });
       if (!action) return res.status(500).json({ message: 'AgentGuard action record was not found.' });
@@ -154,7 +192,28 @@ router.post('/', allowRoles('Admin', 'Reviewer'), upload.single('file'), async (
           needsReview: Boolean(log.needsReview || !extraction.ok),
         })));
       }
+console.log('[n8n] Triggering webhook:', {
+  contractId: contract._id.toString(),
+  uploaderEmail: req.user.email,
+  extractionUrl: `http://localhost:4000/api/contracts/${contract._id}/evaluate-compliance`,
+});
 
+console.log('[n8n] Authorization exists:', Boolean(req.headers.authorization));
+console.log('[n8n] Authorization:', req.headers.authorization);
+
+console.log("[AUTH DEBUG]", {
+  hasAuthorization: Boolean(req.headers.authorization),
+  authorizationPrefix: req.headers.authorization?.slice(0, 20),
+});
+
+triggerN8nWebhook('new-upload', {
+  contractId: contract._id.toString(),
+  title: contract.title,
+  uploaderEmail: req.user.email,
+  extractionUrl: `https://contractiq-4bb0.onrender.com/api/contracts/${contract._id}/evaluate-compliance`,
+  authorization: req.headers.authorization,
+  text: extraction.text
+});
       return res.status(201).json({
         ...contract.toObject(),
         extractedFields: contract.extractedFields || {},
