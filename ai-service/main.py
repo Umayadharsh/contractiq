@@ -466,6 +466,8 @@ def _gemini_response_schema() -> dict[str, Any]:
 
 
 def _is_transient_gemini_error(error: Exception) -> bool:
+    if getattr(error, 'code', None) in (429, 500, 502, 503, 504):
+        return True
     if isinstance(error, genai_errors.APIError) and 500 <= error.code < 600:
         return True
     if "timeout" in str(error).lower() or type(error).__name__ in ["TimeoutException", "ReadTimeout", "ConnectTimeout"]:
@@ -485,7 +487,7 @@ def _extract_with_llm(raw_text: str, validation_error: str | None = None) -> dic
         + raw_text[:20000]
     )
 
-    for attempt in range(3):
+    for attempt in range(4):
         try:
             response = _gemini_client().models.generate_content(
                 model=os.getenv("GEMINI_MODEL", "gemini-3.6-flash"),
@@ -499,20 +501,17 @@ def _extract_with_llm(raw_text: str, validation_error: str | None = None) -> dic
         except HTTPException:
             raise
         except Exception as exc:
-            if _is_transient_gemini_error(exc) and attempt < 2:
-                delay = (0.5 * (2 ** attempt)) + random.uniform(0, 0.25)
-                print(f"Gemini extraction retry {attempt + 1}/2 after {type(exc).__name__}; waiting {delay:.2f}s")
+            if _is_transient_gemini_error(exc) and attempt < 3:
+                backoff_delays = [2.0, 5.0, 10.0]
+                delay = backoff_delays[attempt] + random.uniform(0, 0.5)
+                print(f"Gemini extraction retry {attempt + 1}/3 after {type(exc).__name__}; waiting {delay:.2f}s")
                 time.sleep(delay)
                 continue
 
             print(f"Gemini extraction error: {type(exc).__name__}: {exc}")
             raise HTTPException(
                 status_code=503,
-                detail={
-                    "message": "Gemini extraction service is unavailable.",
-                    "error_type": type(exc).__name__,
-                    "error": str(exc),
-                },
+                detail="Gemini extraction temporarily unavailable after retries",
             ) from exc
 
     content = response.text

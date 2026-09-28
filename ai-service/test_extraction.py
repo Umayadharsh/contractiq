@@ -180,8 +180,8 @@ def test_extract_returns_503_after_all_transient_retries(monkeypatch):
     response = client.post('/extract', json={'text': 'A sufficiently long dummy contract text.'})
 
     assert response.status_code == 503
-    assert models.calls == 3
-    assert response.json()['detail']['message'] == 'Gemini extraction service is unavailable.'
+    assert models.calls == 4
+    assert response.json()['detail'] == 'Gemini extraction temporarily unavailable after retries'
 
 
 @pytest.mark.parametrize('status_code', [400, 404])
@@ -262,5 +262,5 @@ def test_extract_retries_timeout_error_then_fails(monkeypatch):
     response = client.post('/extract', json={'text': 'dummy contract'})
 
     assert response.status_code == 503
-    assert models.calls == 3
-    assert 'Gemini extraction service is unavailable' in response.json()['detail']['message']
+    assert models.calls == 4
+    assert 'temporarily unavailable after retries' in response.json()['detail']
