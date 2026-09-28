@@ -731,8 +731,7 @@ function App() {
                 </div>
               </div>
 
-              {complianceReport && (
-                <div className="audit-log risk-banner">
+              <div className="audit-log risk-banner">
                   <h3>Risk Compliance Report</h3>
                   {!complianceReport ? (
                     <p><strong>{selectedContract.status === 'Failed' ? 'Evaluation Failed' : 'Waiting for Evaluation'}</strong></p>
@@ -780,8 +779,28 @@ function App() {
                   ) : (
                     <p className="success-text">✅ No playbook rule violations detected.</p>
                   )}
-                </div>
-              )}
+                  
+                  {session.user.role !== 'Viewer' && (
+                    <div style={{ marginTop: '20px', display: 'flex', gap: '10px' }}>
+                      <button 
+                        className="text-button" 
+                        disabled={!complianceReport?.agentGuard?.actionId || complianceReport.agentGuard.actionStatus !== 'pending_approval' || evaluating || selectedContract.status === 'Approved' || selectedContract.status === 'Rejected' || !complianceReport.agentGuard?.allowedApproverRoles?.includes(session.user.role)}
+                        onClick={() => decideAgentAction(complianceReport.agentGuard.actionId, 'approve')}
+                      >
+                        Approve
+                      </button>
+                      <button 
+                        className="text-button danger" 
+                        disabled={!complianceReport?.agentGuard?.actionId || complianceReport.agentGuard.actionStatus !== 'pending_approval' || evaluating || selectedContract.status === 'Approved' || selectedContract.status === 'Rejected' || !complianceReport.agentGuard?.allowedApproverRoles?.includes(session.user.role)}
+                        onClick={() => decideAgentAction(complianceReport.agentGuard.actionId, 'reject')}
+                      >
+                        Reject
+                      </button>
+                    </div>
+                  )}
+                  </>
+                )}
+              </div>
 
               {extractedFields && Object.keys(extractedFields).length > 0 && (
                 <div className="extraction-grid">
