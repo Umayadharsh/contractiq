@@ -380,6 +380,11 @@ function App() {
               ⚙️ AgentGuard Policies
             </button>
           )}
+          {session.user.role === 'Admin' && (
+            <button className={`outline ${activeTab === 'auditlogs' ? 'active' : ''}`} onClick={() => setActiveTab('auditlogs')}>
+              📋 Audit Logs
+            </button>
+          )}
           {session.user.role !== 'Viewer' && (
             <button className={`outline ${activeTab === 'pending' ? 'active' : ''}`} onClick={() => setActiveTab('pending')}>
               ⏳ Pending Approval ({pendingActions.length})
@@ -401,7 +406,9 @@ function App() {
       </header>
 
       {/* --- PLAYBOOK ADMIN TAB --- */}
-      {activeTab === 'agentguard' && session.user.role === 'Admin' ? (
+      {activeTab === 'auditlogs' && session.user.role === 'Admin' ? (
+        <AuditLogs session={session} />
+      ) : activeTab === 'agentguard' && session.user.role === 'Admin' ? (
         <section className="content-grid">
           <div className="table-panel">
             <div className="section-heading">
