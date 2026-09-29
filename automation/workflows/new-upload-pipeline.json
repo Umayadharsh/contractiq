@@ -47,7 +47,7 @@
       "parameters": {
         "subject": "Compliance Evaluation: {{$json.body.contractTitle}}",
         "text": "Contract: {{$json.body.contractTitle}}\n\nCompliance Evaluation: {{$json.body.evaluationResult.overallRiskScore}}/100\nStatus: {{$json.body.evaluationResult.overallStatus}}",
-        "toEmail": "={{$json.body.uploaderEmail}}"
+        "toEmail": "={{$json.body.recipients ? $json.body.recipients.join(\",\") : $json.body.uploaderEmail}}"
       },
       "name": "Notify Uploader",
       "type": "n8n-nodes-base.emailSend",

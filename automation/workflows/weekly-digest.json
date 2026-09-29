@@ -39,7 +39,7 @@
       "parameters": {
         "subject": "Weekly ContractIQ Digest",
         "text": "={{$json.summary}}",
-        "toEmail": "admin@example.com"
+        "toEmail": "={{$json.recipients ? $json.recipients.join(\",\") : \"admin@example.com\"}}"
       },
       "name": "Send Email",
       "type": "n8n-nodes-base.emailSend",

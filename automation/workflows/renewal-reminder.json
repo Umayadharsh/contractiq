@@ -39,7 +39,7 @@
       "parameters": {
         "subject": "Contract Renewal Reminder: {{$json.title}}",
         "text": "Contract {{$json.title}} with {{$json.counterparty}} is renewing on {{$json.endDate}} ({{$json.daysRemaining}} days remaining).",
-        "toEmail": "={{$json.uploaderEmail}}"
+        "toEmail": "={{$json.recipients ? $json.recipients.join(\",\") : $json.uploaderEmail}}"
       },
       "name": "Send Email",
       "type": "n8n-nodes-base.emailSend",

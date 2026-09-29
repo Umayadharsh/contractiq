@@ -9,7 +9,7 @@ import { allowRoles, requireAuth } from '../middleware/auth.js';
 import { extractContractData } from '../services/extractionService.js';
 import AgentAction from '../models/AgentAction.js';
 import { executeAgentAction } from '../services/agentActionExecutor.js';
-import { resolveWorkspace } from '../utils/workspace.js';
+import { resolveWorkspace, getNotificationRecipients } from '../utils/workspace.js';
 import { visibleContractFilter } from '../utils/contractVisibility.js';
 import { triggerN8nWebhook } from '../utils/n8n.js';
 
@@ -40,6 +40,7 @@ router.get('/expiring', async (req, res, next) => {
       const contracts = await Contract.find({ workspaceId }).populate('uploadedBy', 'email name');
       
       const now = new Date();
+      const recipients = await getNotificationRecipients(workspaceId);
       const result = [];
       for (const c of contracts) {
         const endDateStr = c.extractedFields?.endDate || c.extractedFields?.['End Date'] || c.extractedFields?.expirationDate;
@@ -55,17 +56,14 @@ router.get('/expiring', async (req, res, next) => {
             counterparty: c.counterparty,
             uploaderEmail: c.uploadedBy?.email,
             endDate: endDate.toISOString().split('T')[0],
-            daysRemaining: diffDays
+            daysRemaining: diffDays,
+            recipients
           });
         }
       }
       
       res.json(result);
     } catch (error) { next(error); }
-  });
-    
-    res.json(result);
-  } catch (error) { next(error); }
 });
 
 router.get('/stats', async (req, res, next) => {
@@ -126,15 +124,9 @@ router.get('/stats', async (req, res, next) => {
         console.error('Failed to fetch AI summary:', err);
       }
 
-      res.json({ ...stats, summary });
+      const recipients = await getNotificationRecipients(workspaceId);
+      res.json({ ...stats, summary, recipients });
     } catch (error) { next(error); }
-  });
-    const reviewed = await Contract.countDocuments({ workspaceId, status: 'Reviewed' });
-    const needsReview = await Contract.countDocuments({ workspaceId, status: 'NeedsReview' });
-    const failed = await Contract.countDocuments({ workspaceId, status: 'Failed' });
-    
-    res.json({ total, reviewed, needsReview, failed });
-  } catch (error) { next(error); }
 });
 
 router.get('/:id', async (req, res, next) => {
@@ -232,6 +224,7 @@ router.post('/:id/evaluate-compliance', allowRoles('Reviewer'), async (req, res,
 
     console.log('n8n webhook triggered');
     triggerN8nWebhook('new-upload', {
+      recipients: await getNotificationRecipients(workspaceId, req.user.id),
       contractId: contract._id.toString(),
       workspaceId: workspaceId.toString(),
       uploaderEmail: contract.uploadedBy?.email || req.user.email,
@@ -254,7 +247,8 @@ router.post('/:id/evaluate-compliance', allowRoles('Reviewer'), async (req, res,
         riskSeverity: 'Critical',
         riskReason: criticalAssessment?.analysis || 'Overall critical status',
         citedRule: criticalAssessment?.ruleId || 'N/A',
-        citedClause: criticalAssessment?.clauseText || 'N/A'
+        citedClause: criticalAssessment?.clauseText || 'N/A',
+        recipients: await getNotificationRecipients(workspaceId, req.user.id)
       });
     }
 

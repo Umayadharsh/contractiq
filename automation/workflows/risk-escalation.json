@@ -32,7 +32,7 @@
       "parameters": {
         "subject": "CRITICAL RISK ESCALATION: {{$json.body.contractTitle}}",
         "text": "Critical risk found in {{$json.body.contractTitle}} ({{$json.body.counterparty}}).\n\nReason: {{$json.body.riskReason}}\nRule: {{$json.body.citedRule}}\nClause: {{$json.body.citedClause}}",
-        "toEmail": "admin@example.com"
+        "toEmail": "={{$json.body.recipients ? $json.body.recipients.join(\",\") : \"admin@example.com\"}}"
       },
       "name": "Send Alert",
       "type": "n8n-nodes-base.emailSend",
