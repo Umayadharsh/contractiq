@@ -639,7 +639,7 @@ function App() {
                             <td>{contract.title}</td>
                             <td>{contract.counterparty}</td>
                             <td>
-                              <span className={`tag ${contract.status === 'NeedsReview' ? 'warning' : ''}`}>
+                              <span className={`tag ${['NeedsReview', 'Waiting for Evaluation'].includes(contract.status) ? 'warning' : contract.status === 'Failed' ? 'danger' : ''}`}>
                                 {contract.status}
                               </span>
                             </td>

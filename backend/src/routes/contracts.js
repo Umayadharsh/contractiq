@@ -119,6 +119,7 @@ router.post('/:id/evaluate-compliance', allowRoles('Reviewer'), async (req, res,
 
     const clauses = await Clause.find({ contractId: contract._id });
     const evaluationRunId = randomUUID();
+    console.log('Evaluation started');
 
     const response = await fetch(`${AI_SERVICE_URL}/contracts/${contract._id}/evaluate-compliance`, {
       method: 'POST',
@@ -153,7 +154,12 @@ router.post('/:id/evaluate-compliance', allowRoles('Reviewer'), async (req, res,
         contract.status = 'Reviewed';
       }
     await contract.save();
+    console.log('Evaluation completed');
+    console.log(`Risk score: ${body.overallRiskScore}`);
+    console.log(`Status: ${body.overallStatus}`);
+    if (body.agentGuard) console.log('AgentGuard action created');
 
+    console.log('n8n webhook triggered');
     triggerN8nWebhook('new-upload', {
       contractId: contract._id.toString(),
       workspaceId: workspaceId.toString(),
@@ -197,11 +203,14 @@ router.post('/', allowRoles('Admin', 'Reviewer'), upload.single('file'), async (
     try {
       const extraction = await extractContractData(contract, req.file, req.body.rawText || req.body.text);
       const isCompleteFailure = !extraction.ok && extraction.clauses.length === 0 && (!extraction.extractedFields || Object.keys(extraction.extractedFields).length === 0);
-      contract.status = isCompleteFailure ? 'Failed' : 'Waiting for Evaluation';
+      contract.status = isCompleteFailure ? 'NeedsReview' : 'Waiting for Evaluation';
       contract.extractionError = extraction.ok ? '' : extraction.reason;
       contract.rawExtractionOutput = extraction.rawOutput || null;
       contract.extractionLogs = extraction.logs || [];
       await contract.save();
+      console.log('Contract uploaded');
+      console.log('Contract saved');
+      console.log(`Status: ${contract.status}`);
 
       if (Array.isArray(extraction.logs) && extraction.logs.length) {
         await ExtractionLog.insertMany(extraction.logs.map((log) => ({
@@ -225,7 +234,7 @@ router.post('/', allowRoles('Admin', 'Reviewer'), upload.single('file'), async (
       const diagnostic = error?.message
         ? `${error.message}${causeSuffix}`
         : `Extraction failed [${errorCode}]`;
-      contract.status = 'Failed';
+      contract.status = 'NeedsReview';
       contract.extractionError = diagnostic;
       contract.rawExtractionOutput = null;
       contract.extractionLogs = [{ timestamp: new Date().toISOString(), level: 'error', message: diagnostic, errorCode }];
