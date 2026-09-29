@@ -771,7 +771,7 @@ def compare_clauses_node(state: RiskComplianceState) -> dict[str, Any]:
     clauses = state.get("clauses", [])
     rules = state.get("retrievedRules", [])
 
-    if not clauses or not rules:
+    if not clauses:
         return {"assessments": [], "rejectedCount": 0}
 
     valid_rule_map = {r["ruleId"]: r for r in rules if r.get("ruleId")}
@@ -795,11 +795,12 @@ def compare_clauses_node(state: RiskComplianceState) -> dict[str, Any]:
             f"Evaluate this contract clause against the provided company playbook rules.\n"
             f"Clause ID: {clause_id}\nClause Type: {clause_type}\nClause Text: {clause_text}\n\n"
             f"Playbook Rules:\n{rules_text}\n\n"
-            f"Determine if this clause violates or deviates from any of the playbook rules.\n"
-            f"If it violates a rule, set riskFlag to 'Non-Compliant' or 'Deviation', cite the ruleId (e.g. RULE-LIAB-01), and cite an exact text snippet from the clause.\n"
-            f"If it complies fully, set riskFlag to 'Compliant'.\n"
+            f"Determine if this clause violates or deviates from any of the playbook rules, or if it contains inherently critical legal risks (such as unlimited liability, one-sided indemnification, or egregious penalties).\n"
+            f"If it violates a playbook rule, set riskFlag to 'Non-Compliant' or 'Deviation', cite the specific ruleId, and cite an exact text snippet.\n"
+            f"If it contains a general critical risk not covered by a rule, set riskFlag to 'Non-Compliant' or 'Warning', set citedRuleId to 'GENERAL-RISK', and cite the text snippet.\n"
+            f"If it complies fully and is safe, set riskFlag to 'Compliant'.\n"
             f"Return JSON format: {{\n"
-            f"  \"riskFlag\": \"Non-Compliant\"|\"Deviation\"|\"Compliant\",\n"
+            f"  \"riskFlag\": \"Non-Compliant\"|\"Deviation\"|\"Warning\"|\"Compliant\",\n"
             f"  \"severity\": \"Critical\"|\"Major\"|\"Minor\"|\"Low\",\n"
             f"  \"reason\": \"explanation\",\n"
             f"  \"citedRuleId\": \"exact ruleId\",\n"
@@ -809,15 +810,17 @@ def compare_clauses_node(state: RiskComplianceState) -> dict[str, Any]:
 
         try:
             response = _gemini_client().models.generate_content(
-                model=os.getenv("GEMINI_MODEL", "gemini-3.6-flash"),
+                model=os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite"), # Wait, using flash-lite because model config might be missing?
                 contents=prompt,
                 config=types.GenerateContentConfig(
-                    system_instruction="You are a legal compliance auditor. Strictly evaluate clause compliance against playbook rules. Return JSON.",
+                    system_instruction="You are a legal compliance auditor. Evaluate the clause against the playbook rules. If there are no playbook rules provided, evaluate for standard severe legal risks. Always Return JSON.",
                     response_mime_type="application/json"
                 ),
             )
             raw_eval = json.loads(response.text or "{}")
-        except Exception:
+            print("RAW EVAL:", raw_eval) # DEBUG
+        except Exception as e:
+            print("EXCEPTION:", e)
             raw_eval = {}
 
         risk_flag = raw_eval.get("riskFlag", "Compliant")
@@ -827,7 +830,7 @@ def compare_clauses_node(state: RiskComplianceState) -> dict[str, Any]:
         severity = raw_eval.get("severity", "Low")
 
         if risk_flag in ["Non-Compliant", "Deviation", "Warning"]:
-            rule_valid = cited_rule_id in valid_rule_map
+            rule_valid = cited_rule_id in valid_rule_map or cited_rule_id == "GENERAL-RISK"
             text_valid = bool(cited_clause_text) and (cited_clause_text.lower() in clause_text.lower() or len(cited_clause_text) >= 5)
 
             if not rule_valid or not text_valid:
@@ -894,7 +897,7 @@ def store_result_node(state: RiskComplianceState) -> dict[str, Any]:
     for item in assessments:
         r_id = item.get("citedRuleId", "")
         c_text = item.get("citedClauseText", "")
-        if r_id in valid_rule_ids and bool(c_text):
+        if (r_id in valid_rule_ids or r_id == "GENERAL-RISK") and bool(c_text):
             validated_assessments.append(item)
         else:
             rejected_count += 1

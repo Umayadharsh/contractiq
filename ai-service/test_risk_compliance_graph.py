@@ -267,3 +267,105 @@ def test_10_e2e_graph_flow(monkeypatch):
     assert len(final_state["retrievedRules"]) == 2
     assert "overallRiskScore" in final_state
     assert final_state["overallStatus"] in ["Pass", "Warning", "Fail"]
+
+# Test 11: Unlimited liability without rules (GENERAL-RISK)
+class DummyResponse:
+    def __init__(self, text):
+        self.text = text
+
+def test_11_unlimited_liability_general_risk(monkeypatch):
+    import json
+    def mock_generate_content(*args, **kwargs):
+        return DummyResponse(json.dumps({
+            "riskFlag": "Non-Compliant",
+            "severity": "Critical",
+            "reason": "Unlimited liability is inherently dangerous.",
+            "citedRuleId": "GENERAL-RISK",
+            "citedClauseText": "strictly unlimited"
+        }))
+    
+    # We must patch the client so it returns our mock
+    class MockModels:
+        def generate_content(self, *args, **kwargs):
+            return mock_generate_content(*args, **kwargs)
+    class MockClient:
+        @property
+        def models(self):
+            return MockModels()
+            
+    monkeypatch.setattr("main._gemini_client", lambda: MockClient())
+
+    state: RiskComplianceState = {
+        "contractId": "doc-11",
+        "workspaceId": "ws-empty",
+        "clauses": [
+            {"id": "c1", "type": "liability", "text": "The Company's liability under this agreement is strictly unlimited and the Company will indemnify everything."}
+        ],
+        "retrievedRules": [],
+        "assessments": [],
+        "overallRiskScore": 100.0,
+        "overallStatus": "Pass",
+        "rejectedCount": 0,
+    }
+    
+    # Run compare_clauses_node
+    from main import compare_clauses_node
+    res = compare_clauses_node(state)
+    
+    # It should identify a GENERAL-RISK
+    assert len(res["assessments"]) > 0, "Should detect unlimited liability as a general risk even without playbook rules"
+    assessment = res["assessments"][0]
+    assert assessment["citedRuleId"] == "GENERAL-RISK", "Must flag as GENERAL-RISK"
+    assert assessment["riskFlag"] in ["Non-Compliant", "Deviation", "Warning"]
+    assert assessment["severity"] in ["Critical", "Major"]
+    
+    # Run compute_risk_score_node
+    state["assessments"] = res["assessments"]
+    from main import compute_risk_score_node
+    res_score = compute_risk_score_node(state)
+    assert res_score["overallRiskScore"] < 100.0, "Risk score must be materially reduced"
+    assert res_score["overallStatus"] in ["Warning", "Fail"]
+
+# Test 12: Low risk contract still gets 100/100
+def test_12_low_risk_contract_high_score(monkeypatch):
+    import json
+    def mock_generate_content(*args, **kwargs):
+        return DummyResponse(json.dumps({
+            "riskFlag": "Compliant",
+            "severity": "Low",
+            "reason": "Liability cap is acceptable.",
+            "citedRuleId": "",
+            "citedClauseText": ""
+        }))
+    
+    class MockModels:
+        def generate_content(self, *args, **kwargs):
+            return mock_generate_content(*args, **kwargs)
+    class MockClient:
+        @property
+        def models(self):
+            return MockModels()
+            
+    monkeypatch.setattr("main._gemini_client", lambda: MockClient())
+
+    state: RiskComplianceState = {
+        "contractId": "doc-12",
+        "workspaceId": "ws-empty",
+        "clauses": [
+            {"id": "c1", "type": "liability", "text": "The Company's liability is capped at the amount paid by the Customer in the past 12 months."}
+        ],
+        "retrievedRules": [],
+        "assessments": [],
+        "overallRiskScore": 100.0,
+        "overallStatus": "Pass",
+        "rejectedCount": 0,
+    }
+    
+    from main import compare_clauses_node, compute_risk_score_node
+    res = compare_clauses_node(state)
+    assert len(res["assessments"]) == 0, "Standard liability cap should not be flagged as general critical risk"
+    
+    state["assessments"] = res["assessments"]
+    res_score = compute_risk_score_node(state)
+    assert res_score["overallRiskScore"] == 100.0
+    assert res_score["overallStatus"] == "Pass"
