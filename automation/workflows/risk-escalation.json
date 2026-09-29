@@ -10,24 +10,34 @@
       "name": "Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1,
-      "position": [
-        250,
-        300
-      ],
-      "webhookId": "risk-escalation-trigger"
+      "position": [200, 300]
     },
     {
       "parameters": {
-        "channel": "#alerts",
-        "text": "=CRITICAL RISK FLAGGED for contract {{$json.body.contractId}}: {{$json.body.riskDetails}}"
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.body.riskSeverity == 'Critical'}}",
+              "value2": true
+            }
+          ]
+        }
       },
-      "name": "Slack Alert",
-      "type": "n8n-nodes-base.slack",
+      "name": "Validate Critical",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [400, 300]
+    },
+    {
+      "parameters": {
+        "subject": "CRITICAL RISK ESCALATION: {{$json.body.contractTitle}}",
+        "text": "Critical risk found in {{$json.body.contractTitle}} ({{$json.body.counterparty}}).\n\nReason: {{$json.body.riskReason}}\nRule: {{$json.body.citedRule}}\nClause: {{$json.body.citedClause}}",
+        "toEmail": "admin@example.com"
+      },
+      "name": "Send Alert",
+      "type": "n8n-nodes-base.emailSend",
       "typeVersion": 2,
-      "position": [
-        450,
-        300
-      ]
+      "position": [600, 300]
     }
   ],
   "connections": {
@@ -35,12 +45,24 @@
       "main": [
         [
           {
-            "node": "Slack Alert",
+            "node": "Validate Critical",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Critical": {
+      "main": [
+        [
+          {
+            "node": "Send Alert",
             "type": "main",
             "index": 0
           }
         ]
       ]
     }
-  }
+  },
+  "settings": {}
 }

@@ -6,100 +6,70 @@
         "rule": {
           "interval": [
             {
-              "field": "weeks",
-              "expression": 1
+              "field": "weeks"
             }
           ]
         }
       },
-      "name": "Schedule",
+      "name": "Weekly Schedule",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1,
-      "position": [
-        250,
-        300
-      ]
+      "position": [200, 300]
     },
     {
       "parameters": {
-        "url": "http://contractiq-guard-api/api/contracts/stats",
-        "method": "GET"
-      },
-      "name": "Aggregate Stats",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 3,
-      "position": [
-        450,
-        300
-      ]
-    },
-    {
-      "parameters": {
-        "model": "gpt-4",
-        "messages": {
-          "messageValues": [
+        "method": "GET",
+        "url": "http://localhost:3000/api/contracts/stats",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
             {
-              "content": "=Generate a weekly summary based on these stats: {{$json}}"
+              "name": "Authorization",
+              "value": "Bearer YOUR_API_TOKEN"
             }
           ]
         }
       },
-      "name": "LLM Summary",
-      "type": "n8n-nodes-base.openAi",
-      "typeVersion": 1,
-      "position": [
-        650,
-        300
-      ]
+      "name": "Fetch Stats",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [400, 300]
     },
     {
       "parameters": {
-        "subject": "Weekly Contract Digest",
-        "text": "={{$json.message.content}}",
-        "toEmail": "team@example.com"
+        "subject": "Weekly ContractIQ Digest",
+        "text": "={{$json.summary}}",
+        "toEmail": "admin@example.com"
       },
-      "name": "Send Digest",
+      "name": "Send Email",
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 2,
-      "position": [
-        850,
-        300
-      ]
+      "position": [600, 300]
     }
   ],
   "connections": {
-    "Schedule": {
+    "Weekly Schedule": {
       "main": [
         [
           {
-            "node": "Aggregate Stats",
+            "node": "Fetch Stats",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Aggregate Stats": {
+    "Fetch Stats": {
       "main": [
         [
           {
-            "node": "LLM Summary",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "LLM Summary": {
-      "main": [
-        [
-          {
-            "node": "Send Digest",
+            "node": "Send Email",
             "type": "main",
             "index": 0
           }
         ]
       ]
     }
-  }
+  },
+  "settings": {}
 }

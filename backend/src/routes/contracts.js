@@ -35,29 +35,100 @@ router.get('/', async (req, res, next) => {
 });
 
 router.get('/expiring', async (req, res, next) => {
-  try {
-    const workspaceId = await resolveWorkspace(req);
-    const contracts = await Contract.find({ workspaceId }).select('title counterparty extractedFields');
-    
-    const now = new Date();
-    const result = contracts.filter(c => {
-      const endDateStr = c.extractedFields?.endDate || c.extractedFields?.['End Date'];
-      if (!endDateStr) return false;
-      const endDate = new Date(endDateStr);
-      if (isNaN(endDate)) return false;
+    try {
+      const workspaceId = await resolveWorkspace(req);
+      const contracts = await Contract.find({ workspaceId }).populate('uploadedBy', 'email name');
       
-      const diffDays = Math.ceil((endDate - now) / (1000 * 60 * 60 * 24));
-      return [30, 14, 7].includes(diffDays) || (diffDays <= 30 && diffDays > 0);
-    });
+      const now = new Date();
+      const result = [];
+      for (const c of contracts) {
+        const endDateStr = c.extractedFields?.endDate || c.extractedFields?.['End Date'] || c.extractedFields?.expirationDate;
+        if (!endDateStr) continue;
+        const endDate = new Date(endDateStr);
+        if (isNaN(endDate.getTime())) continue;
+        
+        const diffDays = Math.ceil((endDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+        if ([30, 14, 7].includes(diffDays)) {
+          result.push({
+            contractId: c._id,
+            title: c.title,
+            counterparty: c.counterparty,
+            uploaderEmail: c.uploadedBy?.email,
+            endDate: endDate.toISOString().split('T')[0],
+            daysRemaining: diffDays
+          });
+        }
+      }
+      
+      res.json(result);
+    } catch (error) { next(error); }
+  });
     
     res.json(result);
   } catch (error) { next(error); }
 });
 
 router.get('/stats', async (req, res, next) => {
-  try {
-    const workspaceId = await resolveWorkspace(req);
-    const total = await Contract.countDocuments({ workspaceId });
+    try {
+      const workspaceId = await resolveWorkspace(req);
+      const contracts = await Contract.find({ workspaceId });
+      
+      let approved = 0;
+      let rejected = 0;
+      let waitingForEvaluation = 0;
+      let waitingForApproval = 0;
+      let criticalMajorRisks = 0;
+      let approachingRenewal = 0;
+      const now = new Date();
+
+      for (const c of contracts) {
+        if (c.status === 'Approved') approved++;
+        if (c.status === 'Rejected') rejected++;
+        if (c.status === 'Waiting for Evaluation' || c.status === 'NeedsReview') waitingForEvaluation++;
+        if (c.status === 'Waiting for Approval') waitingForApproval++;
+        
+        if (c.complianceReport?.overallStatus?.toLowerCase() === 'critical' || c.complianceReport?.overallStatus?.toLowerCase() === 'major') {
+          criticalMajorRisks++;
+        }
+
+        const endDateStr = c.extractedFields?.endDate || c.extractedFields?.['End Date'] || c.extractedFields?.expirationDate;
+        if (endDateStr) {
+          const endDate = new Date(endDateStr);
+          if (!isNaN(endDate.getTime())) {
+            const diffDays = Math.ceil((endDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+            if (diffDays <= 30 && diffDays > 0) approachingRenewal++;
+          }
+        }
+      }
+      
+      const stats = {
+        total: contracts.length, 
+        approved, 
+        rejected, 
+        waitingForEvaluation, 
+        waitingForApproval, 
+        criticalMajorRisks, 
+        approachingRenewal 
+      };
+
+      let summary = '';
+      try {
+        const aiResponse = await fetch(`${AI_SERVICE_URL}/summarize-stats`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Internal-Secret': process.env.AI_INTERNAL_SECRET || '' },
+          body: JSON.stringify({ stats })
+        });
+        if (aiResponse.ok) {
+          const aiData = await aiResponse.json();
+          summary = aiData.summary;
+        }
+      } catch (err) {
+        console.error('Failed to fetch AI summary:', err);
+      }
+
+      res.json({ ...stats, summary });
+    } catch (error) { next(error); }
+  });
     const reviewed = await Contract.countDocuments({ workspaceId, status: 'Reviewed' });
     const needsReview = await Contract.countDocuments({ workspaceId, status: 'NeedsReview' });
     const failed = await Contract.countDocuments({ workspaceId, status: 'Failed' });
@@ -173,9 +244,18 @@ router.post('/:id/evaluate-compliance', allowRoles('Reviewer'), async (req, res,
       }
     });
 
-    const hasCriticalRisk = body.assessments?.some(a => String(a.severity).toLowerCase() === 'critical' || String(a.riskLevel).toLowerCase() === 'critical' || String(a.status).toLowerCase() === 'critical') || String(body.overallStatus).toLowerCase() === 'critical';
+    const criticalAssessment = body.assessments?.find(a => String(a.severity).toLowerCase() === 'critical' || String(a.riskLevel).toLowerCase() === 'critical' || String(a.status).toLowerCase() === 'critical');
+    const hasCriticalRisk = !!criticalAssessment || String(body.overallStatus).toLowerCase() === 'critical';
     if (hasCriticalRisk) {
-      triggerN8nWebhook('risk-escalation', { contractId: contract._id, riskDetails: 'Critical risk flagged in compliance evaluation.' });
+      triggerN8nWebhook('risk-escalation', {
+        contractId: contract._id.toString(),
+        contractTitle: contract.title,
+        counterparty: contract.counterparty,
+        riskSeverity: 'Critical',
+        riskReason: criticalAssessment?.analysis || 'Overall critical status',
+        citedRule: criticalAssessment?.ruleId || 'N/A',
+        citedClause: criticalAssessment?.clauseText || 'N/A'
+      });
     }
 
     if (body.agentGuard?.actionStatus === 'approved') {

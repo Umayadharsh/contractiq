@@ -22,8 +22,13 @@ export async function executeAgentAction(action) {
       
       triggerN8nWebhook('counterparty-followup', {
         contractId: action.contractId,
-        counterpartyEmail,
-        emailBody
+        counterparty: contract ? contract.counterparty : 'Unknown',
+        recipientEmail: counterpartyEmail,
+        approvedContent: emailBody,
+        approvalInfo: {
+          approvedBy: action.approval?.decidedBy,
+          approvedAt: action.approval?.decidedAt
+        }
       });
       
       action.status = 'completed';

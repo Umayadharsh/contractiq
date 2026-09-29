@@ -6,70 +6,70 @@
         "rule": {
           "interval": [
             {
-              "field": "days",
-              "expression": 1
+              "field": "days"
             }
           ]
         }
       },
-      "name": "Schedule",
+      "name": "Daily Schedule",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1,
-      "position": [
-        250,
-        300
-      ]
+      "position": [200, 300]
     },
     {
       "parameters": {
-        "url": "http://contractiq-guard-api/api/contracts/expiring",
-        "method": "GET"
+        "method": "GET",
+        "url": "http://localhost:3000/api/contracts/expiring",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer YOUR_API_TOKEN"
+            }
+          ]
+        }
       },
-      "name": "Query Expiring Contracts",
+      "name": "Fetch Expiring",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 3,
-      "position": [
-        450,
-        300
-      ]
+      "position": [400, 300]
     },
     {
       "parameters": {
-        "subject": "Contract Renewal Reminder",
-        "text": "You have contracts expiring in 30/14/7 days.",
-        "toEmail": "admin@example.com"
+        "subject": "Contract Renewal Reminder: {{$json.title}}",
+        "text": "Contract {{$json.title}} with {{$json.counterparty}} is renewing on {{$json.endDate}} ({{$json.daysRemaining}} days remaining).",
+        "toEmail": "={{$json.uploaderEmail}}"
       },
-      "name": "Send Reminder",
+      "name": "Send Email",
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 2,
-      "position": [
-        650,
-        300
-      ]
+      "position": [600, 300]
     }
   ],
   "connections": {
-    "Schedule": {
+    "Daily Schedule": {
       "main": [
         [
           {
-            "node": "Query Expiring Contracts",
+            "node": "Fetch Expiring",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Query Expiring Contracts": {
+    "Fetch Expiring": {
       "main": [
         [
           {
-            "node": "Send Reminder",
+            "node": "Send Email",
             "type": "main",
             "index": 0
           }
         ]
       ]
     }
-  }
+  },
+  "settings": {}
 }

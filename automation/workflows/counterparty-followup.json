@@ -10,25 +10,34 @@
       "name": "Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1,
-      "position": [
-        250,
-        300
-      ],
-      "webhookId": "counterparty-followup-trigger"
+      "position": [100, 300]
     },
     {
       "parameters": {
-        "subject": "Contract Redline Approved",
-        "text": "={{$json.body.emailBody}}",
-        "toEmail": "={{$json.body.counterpartyEmail}}"
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.body.approvalInfo.approvedBy != null}}",
+              "value2": true
+            }
+          ]
+        }
       },
-      "name": "Send Redline Email",
+      "name": "Validate Approval",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [300, 300]
+    },
+    {
+      "parameters": {
+        "subject": "Contract Redlines for {{$json.body.counterparty}}",
+        "text": "={{$json.body.approvedContent}}",
+        "toEmail": "={{$json.body.recipientEmail}}"
+      },
+      "name": "Send Redline",
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 2,
-      "position": [
-        450,
-        300
-      ]
+      "position": [500, 280]
     },
     {
       "parameters": {
@@ -38,24 +47,55 @@
       "name": "Wait 7 Days",
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1,
-      "position": [
-        650,
-        300
-      ]
+      "position": [700, 280],
+      "webhookId": "wait-node"
     },
     {
       "parameters": {
-        "subject": "Follow Up: Contract Redline",
-        "text": "Just following up on the redline we sent 7 days ago.",
-        "toEmail": "={{$node[\"Webhook\"].json[\"body\"][\"counterpartyEmail\"]}}"
+        "method": "GET",
+        "url": "={{'http://localhost:3000/api/contracts/' + $node['Webhook'].json.body.contractId}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer YOUR_API_TOKEN"
+            }
+          ]
+        }
+      },
+      "name": "Check Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [900, 280]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.status}}",
+              "value2": "Approved",
+              "operation": "notEqual"
+            }
+          ]
+        }
+      },
+      "name": "Is Still Pending?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1100, 280]
+    },
+    {
+      "parameters": {
+        "subject": "Following up: Contract Redlines for {{$node['Webhook'].json.body.counterparty}}",
+        "text": "Hi,\n\nJust following up on the redlines sent 7 days ago. Let us know if you have any questions.\n\nThanks.",
+        "toEmail": "={{$node['Webhook'].json.body.recipientEmail}}"
       },
       "name": "Send Followup",
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 2,
-      "position": [
-        850,
-        300
-      ]
+      "position": [1300, 260]
     }
   ],
   "connections": {
@@ -63,14 +103,26 @@
       "main": [
         [
           {
-            "node": "Send Redline Email",
+            "node": "Validate Approval",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Send Redline Email": {
+    "Validate Approval": {
+      "main": [
+        [
+          {
+            "node": "Send Redline",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Send Redline": {
       "main": [
         [
           {
@@ -85,12 +137,36 @@
       "main": [
         [
           {
-            "node": "Send Followup",
+            "node": "Check Status",
             "type": "main",
             "index": 0
           }
         ]
       ]
+    },
+    "Check Status": {
+      "main": [
+        [
+          {
+            "node": "Is Still Pending?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Still Pending?": {
+      "main": [
+        [
+          {
+            "node": "Send Followup",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
     }
-  }
+  },
+  "settings": {}
 }

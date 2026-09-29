@@ -1087,6 +1087,20 @@ def resume_agent_evaluation(payload: AgentResumeRequest, x_internal_secret: str 
         client.close()
 
 
+class StatsSummaryRequest(BaseModel):
+    stats: dict[str, Any]
+
+@app.post("/summarize-stats")
+def summarize_stats(payload: StatsSummaryRequest, x_internal_secret: str | None = Header(default=None)):
+    _require_internal_secret(x_internal_secret)
+    client = get_gemini_client()
+    prompt = f"Please write a concise, professional management summary of these weekly contract statistics. Highlight any critical areas needing attention:\n\n{json.dumps(payload.stats, indent=2)}"
+    response = client.models.generate_content(
+        model=os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite"),
+        contents=prompt,
+    )
+    return {"summary": response.text}
+
 @app.post("/agentguard/complete")
 def complete_agent_evaluation(payload: AgentCompleteRequest, x_internal_secret: str | None = Header(default=None)):
     _require_internal_secret(x_internal_secret)
