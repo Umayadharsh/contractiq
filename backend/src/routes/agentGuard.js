@@ -84,7 +84,8 @@ router.post('/policies', allowRoles('Admin'), async (req, res, next) => {
       policyId: normalizedPolicyId, workspaceId, name, description, priority: priority ?? 0, trigger, decision, action,
       approval: approval || {}, version: policyVersion, createdBy: req.user.id, updatedBy: req.user.id,
     });
-    res.status(201).json(policy);
+    await logAudit({ actor: req.user.id, actorEmail: req.user.email, workspaceId, actionType: 'create_policy', decision: 'success', details: { policyId: policy.policyId } });
+      res.status(201).json(policy);
   } catch (error) { next(error); }
 });
 
@@ -108,7 +109,8 @@ router.delete('/policies/:id', allowRoles('Admin'), async (req, res, next) => {
     if (!policy) return res.status(404).json({ message: 'AgentGuard policy not found' });
     await requireWorkspace(req, policy.workspaceId);
     await policy.deleteOne();
-    res.json({ message: 'AgentGuard policy deleted', policyId: policy.policyId });
+    await logAudit({ actor: req.user.id, actorEmail: req.user.email, workspaceId: policy.workspaceId, actionType: 'delete_policy', decision: 'success', details: { policyId: policy.policyId } });
+      res.json({ message: 'AgentGuard policy deleted', policyId: policy.policyId });
   } catch (error) { next(error); }
 });
 
@@ -171,7 +173,8 @@ router.post('/actions/:id/approve', allowRoles('Admin', 'Reviewer'), async (req,
     const executed = await executeAgentAction(approvedAction);
       await Contract.updateOne({ _id: action.contractId }, { $set: { status: 'Approved' } });
     await fetch(`${AI_SERVICE_URL}/agentguard/complete`, { method: 'POST', headers: aiInternalHeaders, body: JSON.stringify({ evaluationRunId: action.evaluationRunId, actionId: action.actionId, status: 'completed' }) });
-    res.json({ action: executed, runStatus: 'completed', resumed: true });
+    await logAudit({ actor: req.user.id, actorEmail: req.user.email, workspaceId: action.workspaceId, actionType: 'human_approve', decision: 'approved', details: { actionId: action.actionId, contractId: action.contractId } });
+      res.json({ action: executed, runStatus: 'completed', resumed: true });
   } catch (error) { next(error); }
 });
 
@@ -186,7 +189,8 @@ router.post('/actions/:id/reject', allowRoles('Admin', 'Reviewer'), async (req, 
     const response = await fetch(`${AI_SERVICE_URL}/agentguard/resume`, { method: 'POST', headers: aiInternalHeaders, body: JSON.stringify({ evaluationRunId: action.evaluationRunId, actionId: action.actionId, decision: 'reject', actorId: String(req.user.id), comment: req.body.comment || '' }) });
     const result = await response.json().catch(() => ({}));
     if (!response.ok) return res.status(response.status).json({ message: result.detail || 'AgentGuard resume failed' });
-    res.json({ action: await AgentAction.findOne({ _id: action._id }), runStatus: 'completed', resumed: true });
+    await logAudit({ actor: req.user.id, actorEmail: req.user.email, workspaceId: action.workspaceId, actionType: 'human_reject', decision: 'rejected', details: { actionId: action.actionId, contractId: action.contractId } });
+      res.json({ action: await AgentAction.findOne({ _id: action._id }), runStatus: 'completed', resumed: true });
   } catch (error) { next(error); }
 });
 

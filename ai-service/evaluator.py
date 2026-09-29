@@ -119,6 +119,22 @@ def _persist(database, action, context, decision, status, run_status, policy, re
     try:
         database.agentActions.create_index([("actionId", ASCENDING)], unique=True)
         database.agentActions.insert_one(doc)
+        
+        # Log to auditLogs
+        database.auditLogs.insert_one({
+            "actor": "AgentGuard AI",
+            "actorEmail": "ai-agent@contractiq.local",
+            "workspaceId": action.get("workspaceId", "default"),
+            "actionType": "agent_decision",
+            "decision": decision,
+            "details": {
+                "actionId": action.get("actionId"),
+                "contractId": action.get("contractId"),
+                "policyId": doc.get("policySnapshot", {}).get("policyId") if doc.get("policySnapshot") else None
+            },
+            "timestamp": _now()
+        })
+
         database.agentRuns.update_one(
             {"evaluationRunId": action["evaluationRunId"]},
             {"$set": {"evaluationRunId": action["evaluationRunId"], "workspaceId": action["workspaceId"], "contractId": action["contractId"], "status": run_status, "state": {"action": action, "context": context, "decision": decision}, "updatedAt": _now()}, "$setOnInsert": {"createdAt": _now()}},
@@ -134,7 +150,7 @@ def _persist(database, action, context, decision, status, run_status, policy, re
 
 def resume_evaluation_run(database, evaluation_run_id: str, action_id: str, decision: str, actor_id: str | None = None, comment: str = "") -> dict[str, Any]:
     run = database.agentRuns.find_one({"evaluationRunId": evaluation_run_id})
-    action = database.agentActions.find_one({"actionId": action_id, "evaluationRunId": evaluation_run_id})
+    action = database.agentActions.find_one({"actionId": action.get("actionId"), "evaluationRunId": evaluation_run_id})
     if not run or not action:
         raise ValueError("Persisted evaluation run or action was not found")
     if action.get("status") != "pending_approval":
@@ -170,9 +186,9 @@ def complete_evaluation_run(database, evaluation_run_id: str, action_id: str, st
     if status not in {"completed", "rejected"}:
         raise ValueError("Evaluation completion status is invalid")
     run = database.agentRuns.find_one({"evaluationRunId": evaluation_run_id})
-    action = database.agentActions.find_one({"actionId": action_id, "evaluationRunId": evaluation_run_id})
+    action = database.agentActions.find_one({"actionId": action.get("actionId"), "evaluationRunId": evaluation_run_id})
     if not run or not action:
         raise ValueError("Persisted evaluation run or action was not found")
     run_status = "completed"
     database.agentRuns.update_one({"evaluationRunId": evaluation_run_id}, {"$set": {"status": run_status, "state.completion": status, "updatedAt": _now()}})
-    return {"evaluationRunId": evaluation_run_id, "actionId": action_id, "runStatus": run_status, "actionStatus": action.get("status")}
+    return {"evaluationRunId": evaluation_run_id, "actionId": action.get("actionId"), "runStatus": run_status, "actionStatus": action.get("status")}

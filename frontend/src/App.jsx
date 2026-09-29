@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import './App.css'
+import AuditLogs from './pages/AuditLogs'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000'
 

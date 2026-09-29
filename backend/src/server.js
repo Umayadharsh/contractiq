@@ -7,6 +7,7 @@ import authRoutes from './routes/auth.js';
 import contractRoutes from './routes/contracts.js';
 import playbookRoutes from './routes/playbooks.js';
 import agentGuardRoutes from './routes/agentGuard.js';
+import auditLogRoutes from './routes/auditLogs.js';
 
 const app = express();
 const port = process.env.PORT || 4000;
@@ -30,6 +31,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/contracts', contractRoutes);
 app.use('/api/playbooks', playbookRoutes);
 app.use('/api/agentguard', agentGuardRoutes);
+app.use('/api/audit-logs', auditLogRoutes);
 app.use((error, _req, res, _next) => {
   if (error.name === 'CastError' && error.kind === 'ObjectId') {
     return res.status(400).json({ message: 'Invalid ID format' });

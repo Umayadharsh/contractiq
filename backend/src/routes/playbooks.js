@@ -58,6 +58,7 @@ router.get('/:id', async (req, res, next) => {
       .populate('createdBy', 'name email')
       .populate('updatedBy', 'name email');
     if (!rule) return res.status(404).json({ message: 'Playbook rule not found' });
+    await logAudit({ actor: req.user.id, actorEmail: req.user.email, workspaceId, actionType: 'edit_playbook_rule', decision: 'success', details: { ruleId: rule.ruleId } });
     res.json(rule);
   } catch (error) {
     next(error);
@@ -94,6 +95,7 @@ router.post('/', allowRoles('Admin'), async (req, res, next) => {
     });
 
     syncPlaybookEmbeddings(workspaceId);
+    await logAudit({ actor: req.user.id, actorEmail: req.user.email, workspaceId, actionType: 'create_playbook_rule', decision: 'success', details: { ruleId: newRule.ruleId } });
     res.status(201).json(newRule);
   } catch (error) {
     next(error);
@@ -120,6 +122,7 @@ router.put('/:id', allowRoles('Admin'), async (req, res, next) => {
 
     await rule.save();
     syncPlaybookEmbeddings(workspaceId);
+    await logAudit({ actor: req.user.id, actorEmail: req.user.email, workspaceId, actionType: 'edit_playbook_rule', decision: 'success', details: { ruleId: rule.ruleId } });
     res.json(rule);
   } catch (error) {
     next(error);
@@ -133,6 +136,7 @@ router.delete('/:id', allowRoles('Admin'), async (req, res, next) => {
     const rule = await PlaybookRule.findOneAndDelete({ _id: req.params.id, workspaceId });
     if (!rule) return res.status(404).json({ message: 'Playbook rule not found' });
     syncPlaybookEmbeddings(workspaceId);
+    await logAudit({ actor: req.user.id, actorEmail: req.user.email, workspaceId, actionType: 'delete_playbook_rule', decision: 'success', details: { ruleId: rule.ruleId } });
     res.json({ message: 'Playbook rule deleted successfully', ruleId: rule.ruleId });
   } catch (error) {
     next(error);

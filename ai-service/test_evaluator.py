@@ -16,7 +16,7 @@ class FakeCollection:
         return [doc for doc in self.documents if all(doc.get(key) == value for key, value in query.items())]
 
     def insert_one(self, document):
-        if self.find_one({'actionId': document['actionId']}):
+        if 'actionId' in document and self.find_one({'actionId': document['actionId']}):
             from pymongo.errors import DuplicateKeyError
             raise DuplicateKeyError('duplicate actionId')
         self.documents.append(copy.deepcopy(document))
@@ -40,6 +40,7 @@ class FakeDatabase:
         self.agentPolicies.documents = copy.deepcopy(policies)
         self.agentActions = FakeCollection()
         self.agentRuns = FakeCollection()
+        self.auditLogs = FakeCollection()
 
 
 def action(action_id='action-1', workspace='workspace-1', payload=None):

@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { logAudit } from '../utils/auditLogger.js';
 import { randomUUID } from 'node:crypto';
 import multer from 'multer';
 import path from 'node:path';
@@ -315,7 +316,8 @@ router.post('/', allowRoles('Admin', 'Reviewer'), upload.single('file'), async (
           needsReview: Boolean(log.needsReview || !extraction.ok),
         })));
       }
-      return res.status(201).json({
+      await logAudit({ actor: req.user.id, actorEmail: req.user.email, workspaceId: contract.workspaceId, actionType: 'upload_contract', decision: 'success', details: { contractId: contract._id, title: contract.title } });
+        return res.status(201).json({
         ...contract.toObject(),
         extractedFields: contract.extractedFields || {},
         clauseCount: extraction.clauses?.length || 0,
@@ -340,7 +342,8 @@ router.post('/', allowRoles('Admin', 'Reviewer'), upload.single('file'), async (
         confidence: 'low',
         needsReview: true,
       });
-      return res.status(201).json({
+      await logAudit({ actor: req.user.id, actorEmail: req.user.email, workspaceId: contract.workspaceId, actionType: 'upload_contract', decision: 'success', details: { contractId: contract._id, title: contract.title } });
+        return res.status(201).json({
         ...contract.toObject(),
         extractedFields: contract.extractedFields || {},
         message: 'Contract uploaded. Extraction needs review.',
