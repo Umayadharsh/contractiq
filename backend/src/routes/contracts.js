@@ -43,19 +43,32 @@ router.get('/expiring', async (req, res, next) => {
       const recipients = await getNotificationRecipients(workspaceId);
       const result = [];
       for (const c of contracts) {
-        const endDateStr = c.extractedFields?.endDate || c.extractedFields?.['End Date'] || c.extractedFields?.expirationDate;
-        if (!endDateStr) continue;
-        const endDate = new Date(endDateStr);
-        if (isNaN(endDate.getTime())) continue;
+        const endDateRaw = c.extractedFields?.endDate || c.extractedFields?.['End Date'] || c.extractedFields?.expirationDate;
+        if (!endDateRaw) continue;
         
-        const diffDays = Math.ceil((endDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+        // Handle both string and object { value: "..." } formats
+        const endDateStr = typeof endDateRaw === 'object' ? (endDateRaw.value || endDateRaw.text) : endDateRaw;
+        if (typeof endDateStr !== 'string') continue;
+
+        const match = endDateStr.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+        if (!match) continue;
+
+        // Parse target as midnight UTC to avoid timezone shift
+        const targetUtc = Date.UTC(parseInt(match[1]), parseInt(match[2]) - 1, parseInt(match[3]));
+        
+        // Get today as midnight UTC based on the server's local calendar date
+        const todayUtc = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+        
+        // Exact calendar days difference
+        const diffDays = Math.round((targetUtc - todayUtc) / (1000 * 60 * 60 * 24));
+
         if ([30, 14, 7].includes(diffDays)) {
           result.push({
             contractId: c._id,
             title: c.title,
             counterparty: c.counterparty,
             uploaderEmail: c.uploadedBy?.email,
-            endDate: endDate.toISOString().split('T')[0],
+            endDate: endDateStr.split('T')[0],
             daysRemaining: diffDays,
             recipients
           });
@@ -89,12 +102,17 @@ router.get('/stats', async (req, res, next) => {
           criticalMajorRisks++;
         }
 
-        const endDateStr = c.extractedFields?.endDate || c.extractedFields?.['End Date'] || c.extractedFields?.expirationDate;
-        if (endDateStr) {
-          const endDate = new Date(endDateStr);
-          if (!isNaN(endDate.getTime())) {
-            const diffDays = Math.ceil((endDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-            if (diffDays <= 30 && diffDays > 0) approachingRenewal++;
+        const endDateRaw = c.extractedFields?.endDate || c.extractedFields?.['End Date'] || c.extractedFields?.expirationDate;
+        if (endDateRaw) {
+          const endDateStr = typeof endDateRaw === 'object' ? (endDateRaw.value || endDateRaw.text) : endDateRaw;
+          if (typeof endDateStr === 'string') {
+            const match = endDateStr.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+            if (match) {
+              const targetUtc = Date.UTC(parseInt(match[1]), parseInt(match[2]) - 1, parseInt(match[3]));
+              const todayUtc = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+              const diffDays = Math.round((targetUtc - todayUtc) / (1000 * 60 * 60 * 24));
+              if (diffDays <= 30 && diffDays > 0) approachingRenewal++;
+            }
           }
         }
       }
