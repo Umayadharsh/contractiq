@@ -160,7 +160,13 @@ router.get('/pending', allowRoles('Admin', 'Reviewer'), async (req, res, next) =
 // they were and remain the authoritative decision for Admin and Reviewer.
 router.post('/actions/:id/approve', allowRoles('Admin', 'Reviewer'), async (req, res, next) => {
   try {
-    const action = await AgentAction.findOne({ _id: req.params.id, workspaceId: workspaceFor(req) });
+    const action = await AgentAction.findOne({ 
+        $or: [
+          { _id: /^[a-f0-9]{24}$/i.test(req.params.id) ? req.params.id : null },
+          { actionId: req.params.id }
+        ].filter(cond => Object.values(cond)[0] !== null),
+        workspaceId: workspaceFor(req) 
+      });
     if (!action) return res.status(404).json({ message: 'AgentGuard action not found' });
     await requireWorkspace(req, action.workspaceId);
     if (action.status !== 'pending_approval') return res.status(409).json({ message: 'Action is not awaiting approval.' });
@@ -180,7 +186,13 @@ router.post('/actions/:id/approve', allowRoles('Admin', 'Reviewer'), async (req,
 
 router.post('/actions/:id/reject', allowRoles('Admin', 'Reviewer'), async (req, res, next) => {
   try {
-    const action = await AgentAction.findOne({ _id: req.params.id, workspaceId: workspaceFor(req) });
+    const action = await AgentAction.findOne({ 
+        $or: [
+          { _id: /^[a-f0-9]{24}$/i.test(req.params.id) ? req.params.id : null },
+          { actionId: req.params.id }
+        ].filter(cond => Object.values(cond)[0] !== null),
+        workspaceId: workspaceFor(req) 
+      });
     if (!action) return res.status(404).json({ message: 'AgentGuard action not found' });
     await requireWorkspace(req, action.workspaceId);
     if (action.status !== 'pending_approval') return res.status(409).json({ message: 'Action is not awaiting approval.' });
@@ -196,7 +208,13 @@ router.post('/actions/:id/reject', allowRoles('Admin', 'Reviewer'), async (req, 
 
 router.post('/actions/:id/execute', async (req, res, next) => {
   try {
-    const action = await AgentAction.findOne({ _id: req.params.id, workspaceId: workspaceFor(req) });
+    const action = await AgentAction.findOne({ 
+        $or: [
+          { _id: /^[a-f0-9]{24}$/i.test(req.params.id) ? req.params.id : null },
+          { actionId: req.params.id }
+        ].filter(cond => Object.values(cond)[0] !== null),
+        workspaceId: workspaceFor(req) 
+      });
     if (!action) return res.status(404).json({ message: 'AgentGuard action not found' });
     await requireWorkspace(req, action.workspaceId);
     const executed = await executeAgentAction(action);
