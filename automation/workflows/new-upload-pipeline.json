@@ -18,16 +18,43 @@
     },
     {
       "parameters": {
-        "subject": "Analysis Ready for {{$json.body.title}}",
-        "text": "The analysis for contract {{$json.body.title}} is ready. Evaluation Result: {{$json.body.evaluationResult.overallRiskScore}}/100 ({{$json.body.evaluationResult.overallStatus}})",
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.body.evaluationResult != null}}",
+              "value2": true
+            },
+            {
+              "value1": "={{$json.body.evaluationResult.overallRiskScore != null}}",
+              "value2": true
+            },
+            {
+              "value1": "={{$json.body.evaluationResult.overallStatus != null}}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "name": "Validate Result",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        450,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "subject": "Compliance Evaluation: {{$json.body.contractTitle}}",
+        "text": "Contract: {{$json.body.contractTitle}}\n\nCompliance Evaluation: {{$json.body.evaluationResult.overallRiskScore}}/100\nStatus: {{$json.body.evaluationResult.overallStatus}}",
         "toEmail": "={{$json.body.uploaderEmail}}"
       },
       "name": "Notify Uploader",
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 2,
       "position": [
-        450,
-        300
+        650,
+        280
       ]
     }
   ],
@@ -36,11 +63,23 @@
       "main": [
         [
           {
-            "node": "Notify Uploader",
+            "node": "Validate Result",
             "type": "main",
             "index": 0
           }
         ]
+      ]
+    },
+    "Validate Result": {
+      "main": [
+        [
+          {
+            "node": "Notify Uploader",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
       ]
     }
   },

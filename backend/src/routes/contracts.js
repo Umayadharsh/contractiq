@@ -164,6 +164,7 @@ router.post('/:id/evaluate-compliance', allowRoles('Reviewer'), async (req, res,
       contractId: contract._id.toString(),
       workspaceId: workspaceId.toString(),
       uploaderEmail: contract.uploadedBy?.email || req.user.email,
+      contractTitle: contract.title,
       title: contract.title,
       authorization: req.headers.authorization,
       evaluationResult: {
