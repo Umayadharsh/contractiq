@@ -111,7 +111,7 @@ router.post('/:id/ask', async (req, res, next) => {
 // all until it is first evaluated, so applying the "Reviewer sees only pending"
 // rule here would make the first evaluation impossible: nothing could ever
 // reach a pending state.
-router.post('/:id/evaluate-compliance', allowRoles('Admin', 'Reviewer'), async (req, res, next) => {
+router.post('/:id/evaluate-compliance', allowRoles('Reviewer'), async (req, res, next) => {
   try {
     const workspaceId = await resolveWorkspace(req);
     const contract = await Contract.findOne({ _id: req.params.id, workspaceId }).populate('uploadedBy', 'email name');

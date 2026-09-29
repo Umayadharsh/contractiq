@@ -380,13 +380,9 @@ function App() {
             </button>
           )}
           {session.user.role !== 'Viewer' && (
-                    <button
-                      className="outline"
-                      disabled={evaluating || complianceReport != null}
-                      onClick={() => triggerComplianceEvaluation(selectedContract._id)}
-                    >
-                      {evaluating ? 'Evaluating...' : selectedContract.status === 'Failed' ? 'Evaluation Failed — Retry' : 'Evaluate'}
-                    </button>
+            <button className={`outline ${activeTab === 'pending' ? 'active' : ''}`} onClick={() => setActiveTab('pending')}>
+              ⏳ Pending Approval ({pendingActions.length})
+            </button>
           )}
           <span>
             {session.user.name} · <strong>{session.user.role}</strong>
@@ -727,7 +723,7 @@ function App() {
                   )}
                   {/* Evaluation is an Admin/Reviewer operation; the API refuses a
                       Viewer with 403, so the control is not offered to one. */}
-                  {session.user.role !== 'Viewer' && (
+                  {session.user.role === 'Reviewer' && (
                     <button
                       className="outline"
                       disabled={evaluating || complianceReport != null}
@@ -788,23 +784,39 @@ function App() {
                     <p className="success-text">✅ No playbook rule violations detected.</p>
                   )}
                   
-                  {session.user.role !== 'Viewer' && (
-                    <div style={{ marginTop: '20px', display: 'flex', gap: '10px' }}>
-                      <button 
-                        className="text-button" 
-                        disabled={!complianceReport?.agentGuard?.actionId || complianceReport.agentGuard.actionStatus !== 'pending_approval' || evaluating || selectedContract.status === 'Approved' || selectedContract.status === 'Rejected' || !complianceReport.agentGuard?.allowedApproverRoles?.includes(session.user.role)}
-                        onClick={() => decideAgentAction(complianceReport.agentGuard.actionId, 'approve')}
-                      >
-                        Approve
-                      </button>
-                      <button 
-                        className="text-button danger" 
-                        disabled={!complianceReport?.agentGuard?.actionId || complianceReport.agentGuard.actionStatus !== 'pending_approval' || evaluating || selectedContract.status === 'Approved' || selectedContract.status === 'Rejected' || !complianceReport.agentGuard?.allowedApproverRoles?.includes(session.user.role)}
-                        onClick={() => decideAgentAction(complianceReport.agentGuard.actionId, 'reject')}
-                      >
-                        Reject
-                      </button>
-                    </div>
+                  {session.user.role !== 'Viewer' && complianceReport?.agentGuard?.actionStatus === 'pending_approval' && (
+                    (() => {
+                      const proposerId = complianceReport.proposedActions?.[0]?.proposal?.proposedBy;
+                      const isProposer = proposerId && String(proposerId) === String(session.user.id);
+                      const isAuthorized = complianceReport.agentGuard?.allowedApproverRoles?.includes(session.user.role);
+                      const canDecide = isAuthorized && !isProposer && selectedContract.status !== 'Approved' && selectedContract.status !== 'Rejected' && !evaluating;
+                      
+                      return (
+                        <div style={{ marginTop: '20px', display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                          <div style={{ display: 'flex', gap: '10px' }}>
+                            <button 
+                              className="text-button" 
+                              disabled={!canDecide}
+                              onClick={() => decideAgentAction(complianceReport.agentGuard.actionId, 'approve')}
+                            >
+                              Approve
+                            </button>
+                            <button 
+                              className="text-button danger" 
+                              disabled={!canDecide}
+                              onClick={() => decideAgentAction(complianceReport.agentGuard.actionId, 'reject')}
+                            >
+                              Reject
+                            </button>
+                          </div>
+                          {!canDecide && (
+                            <span className="muted" style={{fontSize:'12px'}}>
+                              {isProposer ? 'You cannot approve or reject your own action.' : 'You are not authorized to approve or reject this action.'}
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })()
                   )}
                   </>
                 )}
