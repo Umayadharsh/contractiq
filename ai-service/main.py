@@ -652,7 +652,7 @@ class RiskComplianceState(TypedDict):
     clauses: list[dict[str, Any]]
     retrievedRules: list[dict[str, Any]]
     assessments: list[RiskAssessment]
-    overallRiskScore: float
+    overallRiskScore: float | None
     overallStatus: str
     rejectedCount: int
     proposedActions: list[dict[str, Any]]
@@ -802,9 +802,10 @@ def compare_clauses_node(state: RiskComplianceState) -> dict[str, Any]:
             f"Determine if this clause violates or deviates from any of the playbook rules, or if it contains inherently critical legal risks (such as unlimited liability, one-sided indemnification, or egregious penalties).\n"
             f"If it violates a playbook rule, set riskFlag to 'Non-Compliant' or 'Deviation', cite the specific ruleId, and cite an exact text snippet.\n"
             f"If it contains a general critical risk not covered by a rule, set riskFlag to 'Non-Compliant' or 'Warning', set citedRuleId to 'GENERAL-RISK', and cite the text snippet.\n"
-            f"If it complies fully and is safe, set riskFlag to 'Compliant'.\n"
+            f"If it complies fully with a playbook rule, set riskFlag to 'Compliant' and cite the ruleId.\n"
+            f"If the clause is unrelated to the playbook rules and poses no severe risks, set riskFlag to 'Not-Applicable'.\n"
             f"Return JSON format: {{\n"
-            f"  \"riskFlag\": \"Non-Compliant\"|\"Deviation\"|\"Warning\"|\"Compliant\",\n"
+            f"  \"riskFlag\": \"Non-Compliant\"|\"Deviation\"|\"Warning\"|\"Compliant\"|\"Not-Applicable\",\n"
             f"  \"severity\": \"Critical\"|\"Major\"|\"Minor\"|\"Low\",\n"
             f"  \"reason\": \"explanation\",\n"
             f"  \"citedRuleId\": \"exact ruleId\",\n"
@@ -849,9 +850,13 @@ def compare_clauses_node(state: RiskComplianceState) -> dict[str, Any]:
         reason = raw_eval.get("reason", "Evaluated against playbook rules.")
         severity = raw_eval.get("severity", "Low")
 
-        if risk_flag in ["Non-Compliant", "Deviation", "Warning"]:
-            rule_valid = cited_rule_id in valid_rule_map or cited_rule_id == "GENERAL-RISK"
-            text_valid = bool(cited_clause_text) and (cited_clause_text.lower() in clause_text.lower() or len(cited_clause_text) >= 5)
+        if risk_flag in ["Non-Compliant", "Deviation", "Warning", "Compliant"]:
+            if risk_flag == "Compliant" and not cited_rule_id:
+                rule_valid = True
+            else:
+                rule_valid = cited_rule_id in valid_rule_map or cited_rule_id == "GENERAL-RISK"
+            
+            text_valid = True if risk_flag == "Compliant" else (bool(cited_clause_text) and (cited_clause_text.lower() in clause_text.lower() or len(cited_clause_text) >= 5))
 
             if not rule_valid or not text_valid:
                 rejected_count += 1
@@ -860,7 +865,7 @@ def compare_clauses_node(state: RiskComplianceState) -> dict[str, Any]:
             assessments.append({
                 "clauseId": str(clause_id),
                 "riskFlag": risk_flag,
-                "severity": severity if severity in ["Critical", "Major", "Minor", "Low"] else "Major",
+                "severity": severity if risk_flag != "Compliant" else "Low",
                 "reason": reason,
                 "citedRuleId": cited_rule_id,
                 "citedClauseText": cited_clause_text
@@ -881,25 +886,26 @@ def compute_risk_score_node(state: RiskComplianceState) -> dict[str, Any]:
 
     if not clauses:
         return {"overallRiskScore": 0.0, "overallStatus": "NeedsReview"}
+        
+    if not assessments:
+        return {"overallRiskScore": None, "overallStatus": "NeedsReview"}
 
     score = 100.0
 
-    for item in assessments:
+    risk_assessments = [item for item in assessments if item.get("riskFlag") in ["Non-Compliant", "Deviation", "Warning"]]
+
+    for item in risk_assessments:
         sev = item.get("severity", "Major")
-        if item.get("riskFlag") in ["Non-Compliant", "Deviation", "Warning"]:
-            if sev == "Critical":
-                score -= 30.0
-            elif sev == "Major":
-                score -= 15.0
-            elif sev == "Minor":
-                score -= 5.0
+        if sev == "Critical":
+            score -= 30.0
+        elif sev == "Major":
+            score -= 15.0
+        elif sev == "Minor":
+            score -= 5.0
 
     final_score = max(0.0, min(100.0, score))
 
-    has_risk = any(
-        item.get("riskFlag") in ["Non-Compliant", "Deviation", "Warning"]
-        for item in assessments
-    )
+    has_risk = len(risk_assessments) > 0
 
     if not has_risk and final_score >= 85.0:
         status = "Pass"

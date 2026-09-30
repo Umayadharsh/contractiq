@@ -167,7 +167,7 @@ def test_6_deterministic_risk_scoring():
     assert res_a["overallRiskScore"] == 50.0
     assert res_a["overallStatus"] == "Fail"
 
-    # Case B: Zero violations => Score: 100.0 (Pass)
+    # Case B: Zero assessments (Nothing evaluated / no applicable clauses) => NeedsReview
     state_b: RiskComplianceState = {
         "contractId": "c1",
         "workspaceId": "w1",
@@ -179,8 +179,8 @@ def test_6_deterministic_risk_scoring():
         "rejectedCount": 0,
     }
     res_b = compute_risk_score_node(state_b)
-    assert res_b["overallRiskScore"] == 100.0
-    assert res_b["overallStatus"] == "Pass"
+    assert res_b["overallRiskScore"] is None
+    assert res_b["overallStatus"] == "NeedsReview"
 
     # Case C: Empty clauses => NeedsReview
     state_c: RiskComplianceState = {
@@ -196,6 +196,23 @@ def test_6_deterministic_risk_scoring():
     res_c = compute_risk_score_node(state_c)
     assert res_c["overallRiskScore"] == 0.0
     assert res_c["overallStatus"] == "NeedsReview"
+    
+    # Case D: Compliant assessment (Applicable rules passed) => Pass
+    state_d: RiskComplianceState = {
+        "contractId": "c1",
+        "workspaceId": "w1",
+        "clauses": [{"id": "dummy"}],
+        "retrievedRules": [],
+        "assessments": [
+            {"clauseId": "c1", "riskFlag": "Compliant", "severity": "Low", "reason": "r1", "citedRuleId": "RULE-1", "citedClauseText": "text1"}
+        ],
+        "overallRiskScore": 100.0,
+        "overallStatus": "Pass",
+        "rejectedCount": 0,
+    }
+    res_d = compute_risk_score_node(state_d)
+    assert res_d["overallRiskScore"] == 100.0
+    assert res_d["overallStatus"] == "Pass"
 
 
 # Test 7: Result Storage Node Re-validation
@@ -246,8 +263,9 @@ def test_8_no_matching_playbook_rule(monkeypatch):
     monkeypatch.setattr("main._gemini_client", lambda: MockClient())
 
     res_comp = compare_clauses_node(state)
-    assert len(res_comp["assessments"]) == 0
+    assert len(res_comp["assessments"]) == 1
 
+    state["assessments"] = res_comp["assessments"]
     res_score = compute_risk_score_node(state)
     assert res_score["overallRiskScore"] == 100.0
     assert res_score["overallStatus"] == "Pass"
@@ -308,7 +326,7 @@ def test_10_e2e_graph_flow(monkeypatch):
     assert final_state["contractId"] == "e2e-contract-1"
     assert len(final_state["retrievedRules"]) == 2
     assert "overallRiskScore" in final_state
-    assert final_state["overallStatus"] in ["Pass", "Warning", "Fail"]
+    assert final_state["overallStatus"] in ["NeedsReview", "Pass", "Warning", "Fail"]
 
 # Test 11: Unlimited liability without rules (GENERAL-RISK)
 class DummyResponse:
@@ -405,7 +423,7 @@ def test_12_low_risk_contract_high_score(monkeypatch):
     
     from main import compare_clauses_node, compute_risk_score_node
     res = compare_clauses_node(state)
-    assert len(res["assessments"]) == 0, "Standard liability cap should not be flagged as general critical risk"
+    assert len(res["assessments"]) == 1, "Should contain the Compliant assessment"
     
     state["assessments"] = res["assessments"]
     res_score = compute_risk_score_node(state)
