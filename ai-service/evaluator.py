@@ -168,7 +168,7 @@ def resume_evaluation_run(database, evaluation_run_id: str, action_id: str, deci
     else:
         raise ValueError("Resume decision must be approve or reject")
 
-    response = dict(action["evaluatorResponse"])
+    response = dict(action.get("evaluatorResponse") or {})
     response.update({"actionStatus": action_status, "runStatus": run_status, "decision": decision})
     database.agentActions.update_one(
         {"actionId": action_id},

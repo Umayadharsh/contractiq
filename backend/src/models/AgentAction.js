@@ -18,6 +18,8 @@ const agentActionSchema = new mongoose.Schema({
     target: mongoose.Schema.Types.Mixed,
     proposedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   },
+  createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+  evaluatorResponse: { type: mongoose.Schema.Types.Mixed, default: () => ({}) },
   policySnapshot: { type: mongoose.Schema.Types.Mixed, default: null },
   approval: {
     required: { type: Boolean, default: false },
@@ -35,7 +37,6 @@ const agentActionSchema = new mongoose.Schema({
 }, { timestamps: true, collection: 'agentActions' });
 
 agentActionSchema.index({ workspaceId: 1, createdAt: -1 });
-agentActionSchema.index({ evaluationRunId: 1 });
 agentActionSchema.index({ workspaceId: 1, status: 1 });
 
 export default mongoose.model('AgentAction', agentActionSchema);

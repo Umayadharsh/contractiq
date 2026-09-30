@@ -634,6 +634,7 @@ class EvaluateComplianceRequest(BaseModel):
     clauses: list[dict[str, Any]] = Field(default_factory=list)
     evaluationRunId: str
     requestedBy: dict[str, Any] = Field(default_factory=dict)
+    uploadedBy: str | None = None
 
 
 class RiskAssessment(TypedDict):
@@ -657,6 +658,7 @@ class RiskComplianceState(TypedDict):
     proposedActions: list[dict[str, Any]]
     evaluationRunId: str
     requestedBy: dict[str, Any]
+    uploadedBy: str | None
     agentAction: dict[str, Any]
     agentGuard: dict[str, Any]
     resumeDecision: str
@@ -948,7 +950,10 @@ def propose_action_node(state: RiskComplianceState) -> dict[str, Any]:
                 "rejectedCount": state.get("rejectedCount", 0),
             }},
             "target": {"contractId": state.get("contractId", "")},
-            "proposedBy": state.get("requestedBy", {}).get("userId"),
+            "proposedBy": (
+                state.get("uploadedBy")
+                or (state.get("requestedBy", {}).get("userId") if state.get("requestedBy", {}).get("role") == "Admin" else None)
+            ),
         },
     }
     if not evaluation_run_id:
@@ -1052,6 +1057,7 @@ def evaluate_compliance(payload: EvaluateComplianceRequest, contract_id: str):
         "proposedActions": [],
         "evaluationRunId": payload.evaluationRunId,
         "requestedBy": payload.requestedBy,
+        "uploadedBy": payload.uploadedBy,
         "agentAction": {},
         "agentGuard": {}
     }
@@ -1079,10 +1085,11 @@ def resume_agent_evaluation(payload: AgentResumeRequest, x_internal_secret: str 
         try:
             result = resume_evaluation_run(database, payload.evaluationRunId, payload.actionId, payload.decision, payload.actorId, payload.comment)
             run = database.agentRuns.find_one({"evaluationRunId": payload.evaluationRunId})
-            resumed_state = resume_evaluation_graph.invoke({**run["state"], "resumeDecision": payload.decision})
-            database.agentRuns.update_one({"evaluationRunId": payload.evaluationRunId}, {"$set": {"state": resumed_state, "status": resumed_state["runStatus"], "updatedAt": _agent_now()}})
-            result["graphResumed"] = resumed_state["resumed"]
-            result["runStatus"] = resumed_state["runStatus"]
+            run_state = (run.get("state") or {}) if run else {}
+            resumed_state = resume_evaluation_graph.invoke({**run_state, "resumeDecision": payload.decision})
+            database.agentRuns.update_one({"evaluationRunId": payload.evaluationRunId}, {"$set": {"state": resumed_state, "status": resumed_state.get("runStatus", "completed"), "updatedAt": _agent_now()}})
+            result["graphResumed"] = resumed_state.get("resumed", True)
+            result["runStatus"] = resumed_state.get("runStatus", result.get("runStatus", "completed"))
             return result
         except ValueError as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc

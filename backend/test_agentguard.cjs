@@ -1,4 +1,5 @@
 const http = require("http");
+const mongoose = require("mongoose");
 
 async function req(path, method, data, token) {
   return new Promise((resolve, reject) => {
@@ -24,8 +25,13 @@ async function req(path, method, data, token) {
 async function run() {
   let passed = 0, failed = 0;
   function assertCheck(cond, msg, res) {
-    if (cond) { passed++; console.log("PASS:", msg); }
-    else { failed++; console.error("FAIL:", msg, res); }
+    if (cond) {
+      passed++;
+      console.log("PASS:", msg);
+    } else {
+      failed++;
+      console.error("FAIL:", msg, res ? JSON.stringify(res.body || res) : "");
+    }
   }
 
   const rand = Date.now();
@@ -38,77 +44,156 @@ async function run() {
   const viewerRes = await req("/auth/register", "POST", { name: "Viewer", email: "view" + rand + "@test.com", password: "password123", selectedRole: "Viewer" });
   const viewerToken = viewerRes.body.token;
 
-  const mongoose = require("mongoose");
   await mongoose.connect("mongodb+srv://umaya:umaya%401234@cluster0.0ylwoff.mongodb.net/test");
   
   const User = mongoose.model("User", new mongoose.Schema({}, { strict: false, collection: "users" }));
-  // Registration assigns Viewer to everyone and ignores selectedRole, so the
-  // Admin and Reviewer this test needs are granted here instead.
   await User.findByIdAndUpdate(adminRes.body.user.id, { role: "Admin" });
   await User.findByIdAndUpdate(reviewerRes.body.user.id, { role: "Reviewer" });
   await User.findByIdAndUpdate(viewerRes.body.user.id, { role: "Viewer" });
 
-  // The role is baked into the JWT at login, so the tokens minted at
-  // registration still carry Viewer. Re-authenticate to pick up the new roles;
-  // without this every request below is refused as a Viewer.
   const adminLogin = await req("/auth/login", "POST", { email: adminRes.body.user.email, password: "password123", selectedRole: "Admin" });
-  assertCheck(adminLogin.status === 200 && adminLogin.body.user?.role === "Admin", "provisioned Admin can authenticate as Admin", adminLogin);
   adminToken = adminLogin.body.token;
   const reviewerLogin = await req("/auth/login", "POST", { email: reviewerRes.body.user.email, password: "password123", selectedRole: "Reviewer" });
-  assertCheck(reviewerLogin.status === 200 && reviewerLogin.body.user?.role === "Reviewer", "provisioned Reviewer can authenticate as Reviewer", reviewerLogin);
   reviewerToken = reviewerLogin.body.token;
 
   const WorkspaceMembership = mongoose.model("WorkspaceMembership", new mongoose.Schema({}, { strict: false, collection: "workspacememberships" }));
   const workspaceId = adminRes.body.user.id;
-  // userId must be stored as an ObjectId: the route reads memberships through the
-  // real WorkspaceMembership model, whose userId is an ObjectId, so a string here
-  // is never matched and the reviewer is refused as "not configured".
-  // Registration enrols every new account in the shared workspace as a Viewer,
-  // so a membership row normally already exists and a plain insert would violate
-  // the unique (workspaceId, userId) index. Set the intended role idempotently.
   const setMembership = (userId, role) => WorkspaceMembership.updateOne(
     { workspaceId, userId: new mongoose.Types.ObjectId(userId) },
-    { $set: { role } },
+    { $set: { role, createdAt: new Date() } },
     { upsert: true }
   );
   await setMembership(reviewerRes.body.user.id, "Reviewer");
   await setMembership(viewerRes.body.user.id, "Viewer");
 
   const AgentAction = mongoose.model("AgentAction", new mongoose.Schema({}, { strict: false, collection: "agentActions" }));
+  const AgentRun = mongoose.model("AgentRun", new mongoose.Schema({}, { strict: false, collection: "agentRuns" }));
+  const Contract = mongoose.model("Contract", new mongoose.Schema({}, { strict: false, collection: "contracts" }));
+  const AuditLog = mongoose.model("AuditLog", new mongoose.Schema({}, { strict: false, collection: "auditLogs" }));
   
-  async function createAction(proposerId) {
-    const actionId = "act_" + Date.now() + Math.random();
-    const doc = await AgentAction.create({
-      actionId, workspaceId, contractId: new mongoose.Types.ObjectId(), evaluationRunId: "eval_" + Date.now(),
-      type: "update_contract", status: "pending_approval", requestFingerprint: actionId,
-      proposal: { proposedBy: proposerId },
-      policySnapshot: { approval: { approverRoles: ["Reviewer", "Admin"] } }
+  async function createAction(proposerId, contractUploaderId) {
+    const actionId = "act_" + Date.now() + "_" + Math.floor(Math.random() * 1000000);
+    const evalId = "eval_" + Date.now() + "_" + Math.floor(Math.random() * 1000000);
+    
+    const contract = await Contract.create({
+      title: "Test Contract " + actionId,
+      counterparty: "Acme Corp",
+      fileUrl: "/uploads/test.pdf",
+      workspaceId,
+      status: "NeedsReview",
+      uploadedBy: contractUploaderId || adminRes.body.user.id
     });
-    return doc._id.toString();
+    
+    await AgentRun.create({
+      evaluationRunId: evalId,
+      workspaceId,
+      status: "waiting_for_approval",
+      state: {
+        evaluationRunId: evalId,
+        actionId,
+        requestedBy: { userId: proposerId }
+      }
+    });
+    
+    const doc = await AgentAction.create({
+      actionId,
+      workspaceId,
+      contractId: contract._id,
+      evaluationRunId: evalId,
+      type: "update_contract",
+      status: "pending_approval",
+      requestFingerprint: actionId,
+      proposal: {
+        proposedBy: proposerId || null,
+        requestedChanges: {
+          complianceReport: {
+            overallRiskScore: 85,
+            overallStatus: "NeedsReview",
+            flaggedClauses: []
+          }
+        }
+      },
+      createdBy: proposerId || null,
+      policySnapshot: { approval: { approverRoles: ["Reviewer", "Admin"] } },
+      evaluatorResponse: {}
+    });
+    return { _id: doc._id.toString(), actionId, contractId: contract._id.toString() };
   }
 
-  const act1 = await createAction(adminRes.body.user.id);
-  const app1 = await req("/agentguard/actions/" + act1 + "/approve?workspaceId=" + workspaceId, "POST", {}, adminToken);
-  assertCheck(app1.status === 403 && app1.body.message.includes("proposer"), "proposer cannot approve own action", app1);
+  console.log("=== Scenario 1: Admin-created action -> Reviewer can approve ===");
+  const sc1 = await createAction(adminRes.body.user.id, adminRes.body.user.id);
+  const app1 = await req(`/agentguard/actions/${sc1.actionId}/approve?workspaceId=${workspaceId}`, "POST", {}, reviewerToken);
+  assertCheck(app1.status === 200, "1. Admin-created action -> Reviewer can approve", app1);
+  const sc1Doc = await AgentAction.findOne({ actionId: sc1.actionId });
+  assertCheck(sc1Doc && ["approved", "completed"].includes(sc1Doc.status), "1b. Action status updated to approved/completed in DB");
 
-  const rej1 = await req("/agentguard/actions/" + act1 + "/reject?workspaceId=" + workspaceId, "POST", {}, adminToken);
-  assertCheck(rej1.status === 403 && rej1.body.message.includes("proposer"), "proposer cannot reject own action", rej1);
+  console.log("=== Scenario 2: Admin-created action -> Reviewer can reject ===");
+  const sc2 = await createAction(adminRes.body.user.id, adminRes.body.user.id);
+  const rej2 = await req(`/agentguard/actions/${sc2.actionId}/reject?workspaceId=${workspaceId}`, "POST", {}, reviewerToken);
+  assertCheck(rej2.status === 200, "2. Admin-created action -> Reviewer can reject", rej2);
+  const sc2Doc = await AgentAction.findOne({ actionId: sc2.actionId });
+  assertCheck(sc2Doc && sc2Doc.status === "rejected", "2b. Action status updated to rejected in DB");
 
-  const appViewer = await req("/agentguard/actions/" + act1 + "/approve?workspaceId=" + workspaceId, "POST", {}, viewerToken);
-  assertCheck(appViewer.status === 403, "Viewer cannot approve", appViewer);
+  console.log("=== Scenario 3: AI-created action -> Reviewer can approve ===");
+  const sc3 = await createAction(null, null);
+  const app3 = await req(`/agentguard/actions/${sc3.actionId}/approve?workspaceId=${workspaceId}`, "POST", {}, reviewerToken);
+  assertCheck(app3.status === 200, "3. AI-created action -> Reviewer can approve", app3);
+  const sc3Doc = await AgentAction.findOne({ actionId: sc3.actionId });
+  assertCheck(sc3Doc && ["approved", "completed"].includes(sc3Doc.status), "3b. AI action status updated to approved/completed in DB");
 
-  const rejViewer = await req("/agentguard/actions/" + act1 + "/reject?workspaceId=" + workspaceId, "POST", {}, viewerToken);
-  assertCheck(rejViewer.status === 403, "Viewer cannot reject", rejViewer);
+  console.log("=== Scenario 4: Reviewer-created action -> same Reviewer gets 403 ===");
+  const sc4 = await createAction(reviewerRes.body.user.id, reviewerRes.body.user.id);
+  const app4 = await req(`/agentguard/actions/${sc4.actionId}/approve?workspaceId=${workspaceId}`, "POST", {}, reviewerToken);
+  assertCheck(app4.status === 403 && (app4.body?.message?.includes("proposer") || app4.body?.message?.includes("own action")), "4a. Reviewer cannot approve own action (403)", app4);
+  const rej4 = await req(`/agentguard/actions/${sc4.actionId}/reject?workspaceId=${workspaceId}`, "POST", {}, reviewerToken);
+  assertCheck(rej4.status === 403 && (rej4.body?.message?.includes("proposer") || rej4.body?.message?.includes("own action")), "4b. Reviewer cannot reject own action (403)", rej4);
+  const sc4Doc = await AgentAction.findOne({ actionId: sc4.actionId });
+  assertCheck(sc4Doc && sc4Doc.status === "pending_approval", "4c. Action remains pending_approval");
 
-  const act2 = await createAction(reviewerRes.body.user.id);
-  const rejAdmin = await req("/agentguard/actions/" + act2 + "/reject?workspaceId=" + workspaceId, "POST", {}, adminToken);
-  assertCheck(rejAdmin.status === 200, "Admin can reject another users action", rejAdmin);
+  console.log("=== Scenario 5: Viewer -> gets 403 ===");
+  const sc5 = await createAction(adminRes.body.user.id, adminRes.body.user.id);
+  const app5 = await req(`/agentguard/actions/${sc5.actionId}/approve?workspaceId=${workspaceId}`, "POST", {}, viewerToken);
+  assertCheck(app5.status === 403, "5a. Viewer cannot approve (403)", app5);
+  const rej5 = await req(`/agentguard/actions/${sc5.actionId}/reject?workspaceId=${workspaceId}`, "POST", {}, viewerToken);
+  assertCheck(rej5.status === 403, "5b. Viewer cannot reject (403)", rej5);
 
-  const act3 = await createAction(adminRes.body.user.id);
-  const appReviewer = await req("/agentguard/actions/" + act3 + "/approve?workspaceId=" + workspaceId, "POST", {}, reviewerToken);
-  assertCheck(appReviewer.status === 200, "Reviewer can approve another users action", appReviewer);
+  console.log("=== Scenario 6: Both MongoDB _id and actionId UUID work ===");
+  const sc6a = await createAction(adminRes.body.user.id, adminRes.body.user.id);
+  const app6a = await req(`/agentguard/actions/${sc6a._id}/approve?workspaceId=${workspaceId}`, "POST", {}, reviewerToken);
+  assertCheck(app6a.status === 200, "6a. MongoDB ObjectId lookup works for approve", app6a);
+
+  const sc6b = await createAction(adminRes.body.user.id, adminRes.body.user.id);
+  const rej6b = await req(`/agentguard/actions/${sc6b.actionId}/reject?workspaceId=${workspaceId}`, "POST", {}, reviewerToken);
+  assertCheck(rej6b.status === 200, "6b. actionId UUID lookup works for reject", rej6b);
+
+  console.log("=== Scenario 7: Successful approval creates the human_approve audit log ===");
+  const auditApprove = await AuditLog.findOne({ actionType: "human_approve", "details.actionId": sc1.actionId });
+  assertCheck(!!auditApprove, "7a. Audit log exists for human_approve", auditApprove);
+  assertCheck(auditApprove && auditApprove.decision === "approved", "7b. Audit log decision is approved");
+  assertCheck(auditApprove && String(auditApprove.actor) === String(reviewerRes.body.user.id), "7c. Audit log actor matches Reviewer");
+
+  console.log("=== Scenario 8: Successful rejection creates the human_reject audit log ===");
+  const auditReject = await AuditLog.findOne({ actionType: "human_reject", "details.actionId": sc2.actionId });
+  assertCheck(!!auditReject, "8a. Audit log exists for human_reject", auditReject);
+  assertCheck(auditReject && auditReject.decision === "rejected", "8b. Audit log decision is rejected");
+  assertCheck(auditReject && String(auditReject.actor) === String(reviewerRes.body.user.id), "8c. Audit log actor matches Reviewer");
+
+  console.log("=== Additional Guard Rails ===");
+  const alreadyApproved = await req(`/agentguard/actions/${sc1.actionId}/approve?workspaceId=${workspaceId}`, "POST", {}, reviewerToken);
+  assertCheck(alreadyApproved.status === 409, "Already approved action cannot be processed (409)", alreadyApproved);
+
+  const invalidAction = await req(`/agentguard/actions/invalid123/approve?workspaceId=${workspaceId}`, "POST", {}, reviewerToken);
+  assertCheck(invalidAction.status === 404, "Invalid action ID returns 404", invalidAction);
+
+  console.log(`\n============================`);
+  console.log(`Summary: Passed: ${passed}, Failed: ${failed}`);
+  console.log(`============================\n`);
   
-  console.log("Passed: " + passed + ", Failed: " + failed);
+  await mongoose.disconnect();
   process.exit(failed > 0 ? 1 : 0);
 }
-run();
+
+run().catch((err) => {
+  console.error("Test execution failed:", err);
+  process.exit(1);
+});

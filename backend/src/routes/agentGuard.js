@@ -6,6 +6,7 @@ import WorkspaceMembership from '../models/WorkspaceMembership.js';
 import { executeAgentAction } from '../services/agentActionExecutor.js';
 import { allowRoles, requireAuth } from '../middleware/auth.js';
 import { attachDefaultWorkspace } from '../utils/workspace.js';
+import { logAudit } from '../utils/auditLogger.js';
 
 const router = Router();
 const AI_SERVICE_URL = process.env.AI_SERVICE_URL || 'http://localhost:8000';
@@ -141,7 +142,15 @@ router.get('/pending', allowRoles('Admin', 'Reviewer'), async (req, res, next) =
         return action;
       }
       try {
-        await action.populate('contractId', 'title counterparty');
+        await action.populate('contractId', 'title counterparty uploadedBy');
+        if (action.contractId?.uploadedBy) {
+          const uploaderId = String(action.contractId.uploadedBy._id || action.contractId.uploadedBy);
+          const currentProposer = action.proposal?.proposedBy ? String(action.proposal.proposedBy) : null;
+          if (currentProposer && currentProposer !== uploaderId && /^[a-f0-9]{24}$/i.test(uploaderId)) {
+            action.proposal.proposedBy = action.contractId.uploadedBy._id || action.contractId.uploadedBy;
+            await AgentAction.updateOne({ _id: action._id }, { $set: { 'proposal.proposedBy': action.proposal.proposedBy, createdBy: action.proposal.proposedBy } });
+          }
+        }
       } catch (error) {
         console.warn(`[AgentGuard] GET /pending: contract population failed for action ${action.actionId}: ${error.name}: ${error.message}`);
       }
@@ -170,17 +179,26 @@ router.post('/actions/:id/approve', allowRoles('Admin', 'Reviewer'), async (req,
     if (!action) return res.status(404).json({ message: 'AgentGuard action not found' });
     await requireWorkspace(req, action.workspaceId);
     if (action.status !== 'pending_approval') return res.status(409).json({ message: 'Action is not awaiting approval.' });
-    if (String(action.proposal?.proposedBy || '') === String(req.user.id)) return res.status(403).json({ message: 'The proposer cannot approve their own action.' });
+
+    const contract = await Contract.findById(action.contractId);
+    let proposerId = action.proposal?.proposedBy || action.createdBy;
+    if (!proposerId && contract?.uploadedBy) {
+      proposerId = contract.uploadedBy._id || contract.uploadedBy;
+    }
+    const isProposer = Boolean(proposerId && proposerId !== 'null' && proposerId !== 'undefined' && String(proposerId) === String(req.user.id));
+    if (isProposer) return res.status(403).json({ message: 'The proposer cannot approve their own action.' });
+
     if (!action.policySnapshot?.approval?.approverRoles?.includes(req.user.role)) return res.status(403).json({ message: 'Role is not allowed to approve this action.' });
     const response = await fetch(`${AI_SERVICE_URL}/agentguard/resume`, { method: 'POST', headers: aiInternalHeaders, body: JSON.stringify({ evaluationRunId: action.evaluationRunId, actionId: action.actionId, decision: 'approve', actorId: String(req.user.id), comment: req.body.comment || '' }) });
     const result = await response.json().catch(() => ({}));
     if (!response.ok) return res.status(response.status).json({ message: result.detail || 'AgentGuard resume failed' });
     const approvedAction = await AgentAction.findOne({ _id: action._id });
     const executed = await executeAgentAction(approvedAction);
-      await Contract.updateOne({ _id: action.contractId }, { $set: { status: 'Approved' } });
+    const contractId = action.contractId?._id || action.contractId;
+    await Contract.updateOne({ _id: contractId }, { $set: { status: 'Approved' } });
     await fetch(`${AI_SERVICE_URL}/agentguard/complete`, { method: 'POST', headers: aiInternalHeaders, body: JSON.stringify({ evaluationRunId: action.evaluationRunId, actionId: action.actionId, status: 'completed' }) });
-    await logAudit({ actor: req.user.id, actorEmail: req.user.email, workspaceId: action.workspaceId, actionType: 'human_approve', decision: 'approved', details: { actionId: action.actionId, contractId: action.contractId } });
-      res.json({ action: executed, runStatus: 'completed', resumed: true });
+    await logAudit({ actor: req.user.id, actorEmail: req.user.email, workspaceId: action.workspaceId, actionType: 'human_approve', decision: 'approved', details: { actionId: action.actionId, contractId } });
+    res.json({ action: executed, runStatus: 'completed', resumed: true });
   } catch (error) { next(error); }
 });
 
@@ -196,13 +214,24 @@ router.post('/actions/:id/reject', allowRoles('Admin', 'Reviewer'), async (req, 
     if (!action) return res.status(404).json({ message: 'AgentGuard action not found' });
     await requireWorkspace(req, action.workspaceId);
     if (action.status !== 'pending_approval') return res.status(409).json({ message: 'Action is not awaiting approval.' });
-    if (String(action.proposal?.proposedBy || '') === String(req.user.id)) return res.status(403).json({ message: 'The proposer cannot reject their own action.' });
+
+    const contract = await Contract.findById(action.contractId);
+    let proposerId = action.proposal?.proposedBy || action.createdBy;
+    if (!proposerId && contract?.uploadedBy) {
+      proposerId = contract.uploadedBy._id || contract.uploadedBy;
+    }
+    const isProposer = Boolean(proposerId && proposerId !== 'null' && proposerId !== 'undefined' && String(proposerId) === String(req.user.id));
+    if (isProposer) return res.status(403).json({ message: 'The proposer cannot reject their own action.' });
+
     if (!action.policySnapshot?.approval?.approverRoles?.includes(req.user.role)) return res.status(403).json({ message: 'Role is not allowed to reject this action.' });
     const response = await fetch(`${AI_SERVICE_URL}/agentguard/resume`, { method: 'POST', headers: aiInternalHeaders, body: JSON.stringify({ evaluationRunId: action.evaluationRunId, actionId: action.actionId, decision: 'reject', actorId: String(req.user.id), comment: req.body.comment || '' }) });
     const result = await response.json().catch(() => ({}));
     if (!response.ok) return res.status(response.status).json({ message: result.detail || 'AgentGuard resume failed' });
-    await logAudit({ actor: req.user.id, actorEmail: req.user.email, workspaceId: action.workspaceId, actionType: 'human_reject', decision: 'rejected', details: { actionId: action.actionId, contractId: action.contractId } });
-      res.json({ action: await AgentAction.findOne({ _id: action._id }), runStatus: 'completed', resumed: true });
+    const contractId = action.contractId?._id || action.contractId;
+    await Contract.updateOne({ _id: contractId }, { $set: { status: 'Rejected' } });
+    await fetch(`${AI_SERVICE_URL}/agentguard/complete`, { method: 'POST', headers: aiInternalHeaders, body: JSON.stringify({ evaluationRunId: action.evaluationRunId, actionId: action.actionId, status: 'rejected' }) });
+    await logAudit({ actor: req.user.id, actorEmail: req.user.email, workspaceId: action.workspaceId, actionType: 'human_reject', decision: 'rejected', details: { actionId: action.actionId, contractId } });
+    res.json({ action: await AgentAction.findOne({ _id: action._id }), runStatus: 'completed', resumed: true });
   } catch (error) { next(error); }
 });
 

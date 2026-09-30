@@ -193,7 +193,7 @@ router.post('/:id/ask', async (req, res, next) => {
 // all until it is first evaluated, so applying the "Reviewer sees only pending"
 // rule here would make the first evaluation impossible: nothing could ever
 // reach a pending state.
-router.post('/:id/evaluate-compliance', allowRoles('Reviewer'), async (req, res, next) => {
+router.post('/:id/evaluate-compliance', allowRoles('Admin', 'Reviewer'), async (req, res, next) => {
   try {
     const workspaceId = await resolveWorkspace(req);
     const contract = await Contract.findOne({ _id: req.params.id, workspaceId }).populate('uploadedBy', 'email name');
@@ -203,6 +203,10 @@ router.post('/:id/evaluate-compliance', allowRoles('Reviewer'), async (req, res,
     const evaluationRunId = randomUUID();
     console.log('Evaluation started');
 
+    const uploaderId = contract.uploadedBy?._id
+      ? String(contract.uploadedBy._id)
+      : (contract.uploadedBy ? String(contract.uploadedBy) : null);
+
     const response = await fetch(`${AI_SERVICE_URL}/contracts/${contract._id}/evaluate-compliance`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -211,6 +215,7 @@ router.post('/:id/evaluate-compliance', allowRoles('Reviewer'), async (req, res,
         clauses: clauses.map((c) => ({ id: String(c._id), type: c.type, text: c.text, summary: c.summary || '' })),
         evaluationRunId,
         requestedBy: { userId: String(req.user.id), role: req.user.role },
+        uploadedBy: uploaderId,
       }),
     });
     const body = await response.json().catch(() => ({}));
@@ -218,6 +223,22 @@ router.post('/:id/evaluate-compliance', allowRoles('Reviewer'), async (req, res,
         contract.status = 'Failed';
         await contract.save();
         return res.status(response.status).json({ message: body?.detail || body?.message || 'Compliance evaluation failed' });
+    }
+
+    const correctProposer = uploaderId;
+    if (body.agentGuard?.actionId) {
+      await AgentAction.updateOne(
+        { actionId: body.agentGuard.actionId },
+        { $set: { 'proposal.proposedBy': correctProposer, createdBy: correctProposer } }
+      );
+    }
+    if (Array.isArray(body.proposedActions)) {
+      body.proposedActions.forEach((pa) => {
+        if (pa.proposal) pa.proposal.proposedBy = correctProposer;
+      });
+    }
+    if (body.agentAction?.proposal) {
+      body.agentAction.proposal.proposedBy = correctProposer;
     }
 
     contract.complianceReport = {
@@ -228,7 +249,7 @@ router.post('/:id/evaluate-compliance', allowRoles('Reviewer'), async (req, res,
       rejectedCount: body.rejectedCount,
       proposedActions: body.proposedActions,
       evaluationRunId: body.evaluationRunId,
-        agentGuard: body.agentGuard
+      agentGuard: body.agentGuard
     };
     if (body.agentGuard?.actionStatus === 'pending_approval') {
         contract.status = 'Waiting for Approval';

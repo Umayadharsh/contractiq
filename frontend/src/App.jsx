@@ -441,7 +441,8 @@ function App() {
         <section className="content-grid"><div className="table-panel"><div className="section-heading"><div><p className="eyebrow">AGENTGUARD WORKFLOW</p><h2>Pending approval</h2></div></div>
           {pendingActions.length ? <div className="table-wrap"><table><thead><tr><th>Contract</th><th>Action</th><th>Proposed by</th><th>Status</th><th>Approver</th><th>Decision</th></tr></thead><tbody>
             {pendingActions.map((action) => {
-              const isProposer = String(action.proposal?.proposedBy) === String(session.user.id);
+              const proposerId = action.proposal?.proposedBy || action.createdBy;
+              const isProposer = Boolean(proposerId && proposerId !== 'null' && proposerId !== 'undefined' && String(proposerId) === String(session.user.id));
               const allowedRoles = action.policySnapshot?.approval?.approverRoles || [];
               const isAuthorized = allowedRoles.includes(session.user.role);
               const canDecide = isAuthorized && !isProposer;
@@ -449,7 +450,7 @@ function App() {
                 <tr key={action._id}>
                   <td>{action.contractId?.title || action.contractId}</td>
                   <td>{action.type}</td>
-                  <td>{action.proposal?.proposedBy || 'Unknown'}</td>
+                  <td>{proposerId || 'AgentGuard AI'}</td>
                   <td>{action.status}</td>
                   <td>{allowedRoles.join(', ') || 'None'}</td>
                   <td>
@@ -731,7 +732,7 @@ function App() {
                   )}
                   {/* Evaluation is an Admin/Reviewer operation; the API refuses a
                       Viewer with 403, so the control is not offered to one. */}
-                  {session.user.role === 'Reviewer' && (
+                  {['Admin', 'Reviewer'].includes(session.user.role) && (
                     <button
                       className="outline"
                       disabled={evaluating || complianceReport != null}
@@ -794,8 +795,8 @@ function App() {
                   
                   {session.user.role !== 'Viewer' && complianceReport?.agentGuard?.actionStatus === 'pending_approval' && (
                     (() => {
-                      const proposerId = complianceReport.proposedActions?.[0]?.proposal?.proposedBy;
-                      const isProposer = proposerId && String(proposerId) === String(session.user.id);
+                      const proposerId = complianceReport.proposedActions?.[0]?.proposal?.proposedBy || complianceReport.agentAction?.proposal?.proposedBy || complianceReport.agentAction?.createdBy;
+                      const isProposer = Boolean(proposerId && proposerId !== 'null' && proposerId !== 'undefined' && String(proposerId) === String(session.user.id));
                       const isAuthorized = complianceReport.agentGuard?.allowedApproverRoles?.includes(session.user.role);
                       const canDecide = isAuthorized && !isProposer && selectedContract.status !== 'Approved' && selectedContract.status !== 'Rejected' && !evaluating;
                       
