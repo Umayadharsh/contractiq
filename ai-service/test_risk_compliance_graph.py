@@ -87,6 +87,20 @@ def test_3_clause_comparison(monkeypatch):
         "rejectedCount": 0,
     }
 
+    import json
+    def mock_generate_content(*args, **kwargs):
+        return DummyResponse(json.dumps({}))
+    
+    class MockModels:
+        def generate_content(self, *args, **kwargs):
+            return mock_generate_content(*args, **kwargs)
+    class MockClient:
+        @property
+        def models(self):
+            return MockModels()
+            
+    monkeypatch.setattr("main._gemini_client", lambda: MockClient())
+
     res = compare_clauses_node(state)
     assert isinstance(res.get("assessments"), list)
     assert isinstance(res.get("rejectedCount"), int)
@@ -206,7 +220,7 @@ def test_7_result_storage_validation():
 
 
 # Test 8: No Matching Playbook Rule
-def test_8_no_matching_playbook_rule():
+def test_8_no_matching_playbook_rule(monkeypatch):
     state: RiskComplianceState = {
         "contractId": "c1",
         "workspaceId": "empty-ws",
@@ -217,6 +231,20 @@ def test_8_no_matching_playbook_rule():
         "overallStatus": "Pass",
         "rejectedCount": 0,
     }
+    import json
+    def mock_generate_content(*args, **kwargs):
+        return DummyResponse(json.dumps({}))
+    
+    class MockModels:
+        def generate_content(self, *args, **kwargs):
+            return mock_generate_content(*args, **kwargs)
+    class MockClient:
+        @property
+        def models(self):
+            return MockModels()
+            
+    monkeypatch.setattr("main._gemini_client", lambda: MockClient())
+
     res_comp = compare_clauses_node(state)
     assert len(res_comp["assessments"]) == 0
 
@@ -260,6 +288,20 @@ def test_10_e2e_graph_flow(monkeypatch):
         "overallStatus": "Pass",
         "rejectedCount": 0,
     }
+
+    import json
+    def mock_generate_content(*args, **kwargs):
+        return DummyResponse(json.dumps({}))
+    
+    class MockModels:
+        def generate_content(self, *args, **kwargs):
+            return mock_generate_content(*args, **kwargs)
+    class MockClient:
+        @property
+        def models(self):
+            return MockModels()
+            
+    monkeypatch.setattr("main._gemini_client", lambda: MockClient())
 
     final_state = risk_compliance_graph.invoke(initial_state)
 
@@ -369,3 +411,178 @@ def test_12_low_risk_contract_high_score(monkeypatch):
     res_score = compute_risk_score_node(state)
     assert res_score["overallRiskScore"] == 100.0
     assert res_score["overallStatus"] == "Pass"
+
+
+# Test 13: Gemini 503 -> retry -> success
+def test_13_gemini_503_retry_success(monkeypatch):
+    import json
+    from google.genai import errors as genai_errors
+    from main import compare_clauses_node
+
+    attempts = 0
+    def mock_generate_content(*args, **kwargs):
+        nonlocal attempts
+        attempts += 1
+        if attempts < 3:
+            # Simulate transient 503 error
+            err = Exception("503 Service Unavailable")
+            err.code = 503
+            raise err
+        return DummyResponse(json.dumps({
+            "riskFlag": "Non-Compliant",
+            "severity": "Major",
+            "reason": "Test reason",
+            "citedRuleId": "RULE-1",
+            "citedClauseText": "Test text"
+        }))
+    
+    class MockModels:
+        def generate_content(self, *args, **kwargs):
+            return mock_generate_content(*args, **kwargs)
+    class MockClient:
+        @property
+        def models(self):
+            return MockModels()
+            
+    monkeypatch.setattr("main._gemini_client", lambda: MockClient())
+    # Speed up sleep
+    monkeypatch.setattr("time.sleep", lambda x: None)
+
+    state = {
+        "contractId": "doc-13",
+        "workspaceId": "ws",
+        "clauses": [{"id": "c1", "type": "test", "text": "Test clause"}],
+        "retrievedRules": [{"ruleId": "RULE-1", "category": "Test", "title": "Test Title", "expectedRequirement": "Test Req", "severity": "Major"}],
+        "assessments": []
+    }
+    
+    res = compare_clauses_node(state)
+    assert attempts == 3, "Should have retried twice and succeeded on third attempt"
+    assert len(res["assessments"]) == 1
+    assert res["assessments"][0]["citedRuleId"] == "RULE-1"
+
+
+# Test 14: Gemini 503 -> retry exhaustion -> HTTP 503
+def test_14_gemini_503_exhaustion_raises_http_503(monkeypatch):
+    from fastapi import HTTPException
+    from main import compare_clauses_node
+
+    attempts = 0
+    def mock_generate_content(*args, **kwargs):
+        nonlocal attempts
+        attempts += 1
+        err = Exception("503 Service Unavailable")
+        err.code = 503
+        raise err
+    
+    class MockModels:
+        def generate_content(self, *args, **kwargs):
+            return mock_generate_content(*args, **kwargs)
+    class MockClient:
+        @property
+        def models(self):
+            return MockModels()
+            
+    monkeypatch.setattr("main._gemini_client", lambda: MockClient())
+    monkeypatch.setattr("time.sleep", lambda x: None)
+
+    state = {
+        "contractId": "doc-14",
+        "workspaceId": "ws",
+        "clauses": [{"id": "c1", "type": "test", "text": "Test clause"}],
+        "retrievedRules": [],
+        "assessments": []
+    }
+    
+    import pytest
+    with pytest.raises(HTTPException) as exc:
+        compare_clauses_node(state)
+    assert exc.value.status_code == 503
+    assert attempts == 4, "Should have exhausted all 4 attempts"
+
+
+# Test 15: First clause succeeds, later clause gets 503 -> successful assessment preserved
+def test_15_preserve_successful_assessments_on_later_503(monkeypatch):
+    import json
+    from main import compare_clauses_node
+
+    calls = 0
+    def mock_generate_content(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return DummyResponse(json.dumps({
+                "riskFlag": "Non-Compliant",
+                "severity": "Major",
+                "reason": "Test reason",
+                "citedRuleId": "RULE-1",
+                "citedClauseText": "Test text"
+            }))
+        else:
+            err = Exception("503 Service Unavailable")
+            err.code = 503
+            raise err
+    
+    class MockModels:
+        def generate_content(self, *args, **kwargs):
+            return mock_generate_content(*args, **kwargs)
+    class MockClient:
+        @property
+        def models(self):
+            return MockModels()
+            
+    monkeypatch.setattr("main._gemini_client", lambda: MockClient())
+    monkeypatch.setattr("time.sleep", lambda x: None)
+
+    state = {
+        "contractId": "doc-15",
+        "workspaceId": "ws",
+        "clauses": [
+            {"id": "c1", "type": "test", "text": "Test clause 1"},
+            {"id": "c2", "type": "test", "text": "Test clause 2"}
+        ],
+        "retrievedRules": [{"ruleId": "RULE-1", "category": "Test", "title": "Test Title", "expectedRequirement": "Test Req", "severity": "Major"}],
+        "assessments": []
+    }
+    
+    res = compare_clauses_node(state)
+    assert len(res["assessments"]) == 1, "Should preserve the successful assessment"
+    assert res["assessments"][0]["citedRuleId"] == "RULE-1"
+
+
+# Test 16: Non-retryable 4xx -> no retries
+def test_16_non_retryable_400_no_retries(monkeypatch):
+    from fastapi import HTTPException
+    from main import compare_clauses_node
+
+    attempts = 0
+    def mock_generate_content(*args, **kwargs):
+        nonlocal attempts
+        attempts += 1
+        err = Exception("400 Bad Request")
+        err.code = 400
+        raise err
+    
+    class MockModels:
+        def generate_content(self, *args, **kwargs):
+            return mock_generate_content(*args, **kwargs)
+    class MockClient:
+        @property
+        def models(self):
+            return MockModels()
+            
+    monkeypatch.setattr("main._gemini_client", lambda: MockClient())
+
+    state = {
+        "contractId": "doc-16",
+        "workspaceId": "ws",
+        "clauses": [{"id": "c1", "type": "test", "text": "Test clause"}],
+        "retrievedRules": [],
+        "assessments": []
+    }
+    
+    import pytest
+    with pytest.raises(HTTPException) as exc:
+        compare_clauses_node(state)
+    assert exc.value.status_code == 503
+    assert attempts == 1, "Should fail immediately without retrying a 400"

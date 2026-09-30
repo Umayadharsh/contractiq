@@ -785,6 +785,8 @@ def compare_clauses_node(state: RiskComplianceState) -> dict[str, Any]:
         for r in rules
     ])
 
+    evaluation_failures = 0
+
     for clause in clauses:
         clause_id = clause.get("id") or clause.get("_id") or "unknown"
         clause_text = clause.get("text", "")
@@ -810,20 +812,36 @@ def compare_clauses_node(state: RiskComplianceState) -> dict[str, Any]:
             f"}}"
         )
 
-        try:
-            response = _gemini_client().models.generate_content(
-                model=os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite"), # Wait, using flash-lite because model config might be missing?
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    system_instruction="You are a legal compliance auditor. Evaluate the clause against the playbook rules. If there are no playbook rules provided, evaluate for standard severe legal risks. Always Return JSON.",
-                    response_mime_type="application/json"
-                ),
-            )
-            raw_eval = json.loads(response.text or "{}")
-            print("RAW EVAL:", raw_eval) # DEBUG
-        except Exception as e:
-            print("EXCEPTION:", e)
-            raw_eval = {}
+        raw_eval = {}
+        for attempt in range(4):
+            try:
+                response = _gemini_client().models.generate_content(
+                    model=os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite"),
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        system_instruction="You are a legal compliance auditor. Evaluate the clause against the playbook rules. If there are no playbook rules provided, evaluate for standard severe legal risks. Always Return JSON.",
+                        response_mime_type="application/json"
+                    ),
+                )
+                raw_eval = json.loads(response.text or "{}")
+                print("RAW EVAL:", raw_eval) # DEBUG
+                break
+            except Exception as e:
+                if _is_transient_gemini_error(e) and attempt < 3:
+                    backoff_delays = [2.0, 5.0, 10.0]
+                    delay = backoff_delays[attempt] + random.uniform(0, 0.5)
+                    print(f"Gemini evaluation retry {attempt + 1}/3 after {type(e).__name__}; waiting {delay:.2f}s")
+                    time.sleep(delay)
+                    continue
+
+                print(f"Gemini evaluation error: {type(e).__name__}: {e}")
+                evaluation_failures += 1
+                break
+
+        # If raw_eval is empty (because of an exception or empty response), we skip adding it.
+        # But we don't want to falsely mark it "Compliant" if it failed completely.
+        if not raw_eval and evaluation_failures > 0:
+            continue
 
         risk_flag = raw_eval.get("riskFlag", "Compliant")
         cited_rule_id = str(raw_eval.get("citedRuleId", "")).strip()
@@ -847,6 +865,12 @@ def compare_clauses_node(state: RiskComplianceState) -> dict[str, Any]:
                 "citedRuleId": cited_rule_id,
                 "citedClauseText": cited_clause_text
             })
+
+    if not assessments and evaluation_failures > 0:
+        raise HTTPException(
+            status_code=503,
+            detail="Gemini evaluation temporarily unavailable after retries",
+        )
 
     return {"assessments": assessments, "rejectedCount": rejected_count}
 
