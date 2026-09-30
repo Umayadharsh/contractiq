@@ -16,10 +16,11 @@ export async function visibleContractFilter(user, workspaceId) {
     const pendingIds = await contractIdsWithActions(workspaceId, [PENDING_ACTION_STATUS]);
     // Reviewers can see contracts waiting for evaluation (NeedsReview), 
     // contracts that failed evaluation (Failed) so they can retry,
-    // and contracts waiting for their approval (pending_approval action).
+    // contracts that were just evaluated but didn't require approval (Reviewed),
+    // and contracts waiting for their approval (Waiting for Approval).
     return {
       $or: [
-        { status: { $in: ['NeedsReview', 'Waiting for Evaluation', 'Failed'] } },
+        { status: { $in: ['NeedsReview', 'Waiting for Evaluation', 'Failed', 'Reviewed', 'Rejected', 'Waiting for Approval'] } },
         { _id: { $in: pendingIds } }
       ]
     };

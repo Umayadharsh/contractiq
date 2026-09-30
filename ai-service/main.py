@@ -374,12 +374,12 @@ def _looks_placeholder(value: Any) -> bool:
 
 def _has_invalid_required_data(extraction: ContractExtraction) -> bool:
     for party in extraction.parties:
-        if party.value is None or _looks_placeholder(party.value) or party.confidence != "high":
+        if party.value is None or _looks_placeholder(party.value):
             return True
     if not extraction.clauses:
         return True
     for clause in extraction.clauses:
-        if clause.confidence != "high" or _looks_placeholder(clause.type) or _looks_placeholder(clause.text):
+        if _looks_placeholder(clause.type) or _looks_placeholder(clause.text):
             return True
     return False
 

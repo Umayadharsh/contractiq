@@ -106,7 +106,12 @@ export async function extractContractData(contract, file, rawText) {
 
   const body = await response.json().catch(() => ({}));
   if (!response.ok) {
-    const reason = body?.detail?.message || body?.message || 'AI contract extraction failed validation.';
+    let reason = 'AI contract extraction failed validation.';
+    if (body?.detail) {
+      reason = typeof body.detail === 'string' ? body.detail : (body.detail.message || body.detail);
+    } else if (body?.message) {
+      reason = body.message;
+    }
     const logs = [{ timestamp: new Date().toISOString(), level: 'error', message: reason, rawOutput: body?.detail?.rawOutput || null }];
     return { ok: false, reason, clauses: [], logs, rawOutput: body?.detail?.rawOutput || null };
   }

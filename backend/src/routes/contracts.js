@@ -200,6 +200,9 @@ router.post('/:id/evaluate-compliance', allowRoles('Admin', 'Reviewer'), async (
     if (!contract) return res.status(404).json({ message: 'Contract not found' });
 
     const clauses = await Clause.find({ contractId: contract._id });
+    if (!clauses || clauses.length === 0) {
+      return res.status(400).json({ message: 'Evaluation failed: Contract extraction failed to find any clauses. Please ensure the contract was extracted properly and retry.' });
+    }
     const evaluationRunId = randomUUID();
     console.log('Evaluation started');
 
@@ -251,11 +254,15 @@ router.post('/:id/evaluate-compliance', allowRoles('Admin', 'Reviewer'), async (
       evaluationRunId: body.evaluationRunId,
       agentGuard: body.agentGuard
     };
-    if (body.agentGuard?.actionStatus === 'pending_approval') {
-        contract.status = 'Waiting for Approval';
-      } else {
-        contract.status = 'Reviewed';
-      }
+    if (!body.agentGuard || Object.keys(body.agentGuard).length === 0) {
+      contract.status = 'Failed'; // No clauses extracted or evaluation yielded no AgentGuard result
+    } else if (body.agentGuard?.actionStatus === 'pending_approval') {
+      contract.status = 'Waiting for Approval';
+    } else if (body.agentGuard?.actionStatus === 'blocked') {
+      contract.status = 'Rejected';
+    } else {
+      contract.status = 'Reviewed';
+    }
     await contract.save();
     console.log('Evaluation completed');
     console.log(`Risk score: ${body.overallRiskScore}`);
