@@ -1,0 +1,19 @@
+--- NDA ---
+
+This NDA is entered into as of May 26, 2026 (the 'Start Date') between Acme Corp and Beta Solutions.
+
+1. GOVERNING LAW
+This agreement shall be governed by the laws of Washington.
+
+2. PAYMENT TERMS
+The total contract value is $302000. Payment is Net 60.
+
+3. LIABILITY LIMIT
+Liability is capped at $50,000.
+
+4. TERM
+This agreement terminates on May 26, 2027 (the 'End Date').
+
+5. CONFIDENTIALITY
+Both parties agree to maintain strict confidentiality of all data shared.
+

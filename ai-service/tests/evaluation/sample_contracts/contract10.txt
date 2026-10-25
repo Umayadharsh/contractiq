@@ -1,0 +1,19 @@
+--- MASTER SERVICE AGREEMENT ---
+
+This Master Service Agreement is entered into as of February 09, 2026 (the 'Start Date') between Global Tech and Startup Inc.
+
+1. GOVERNING LAW
+This agreement shall be governed by the laws of New York.
+
+2. PAYMENT TERMS
+The total contract value is $325000. Payment is Net 45.
+
+3. LIABILITY LIMIT
+Liability is capped at $50,000.
+
+4. TERM
+This agreement terminates on February 09, 2027 (the 'End Date').
+
+5. CONFIDENTIALITY
+Both parties agree to maintain strict confidentiality of all data shared.
+

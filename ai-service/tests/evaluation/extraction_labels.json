@@ -1,0 +1,302 @@
+{
+  "contract01.txt": {
+    "parties": [
+      "Global Tech",
+      "Startup Inc"
+    ],
+    "contractValue": "$46000",
+    "startDate": "2026-06-07",
+    "endDate": "2027-06-07",
+    "governingLaw": "California",
+    "paymentTerms": "Due on receipt",
+    "liabilityLimit": "Unlimited"
+  },
+  "contract02.txt": {
+    "parties": [
+      "DataWorks",
+      "CloudHost"
+    ],
+    "contractValue": "$82000",
+    "startDate": "2026-06-24",
+    "endDate": "2027-06-24",
+    "governingLaw": "New York",
+    "paymentTerms": "Net 30",
+    "liabilityLimit": "$10,000"
+  },
+  "contract03.txt": {
+    "parties": [
+      "Alpha LLC",
+      "Omega Partners"
+    ],
+    "contractValue": "$268000",
+    "startDate": "2026-04-17",
+    "endDate": "2027-04-17",
+    "governingLaw": "Delaware",
+    "paymentTerms": "Net 45",
+    "liabilityLimit": "Unlimited"
+  },
+  "contract04.txt": {
+    "parties": [
+      "Alpha LLC",
+      "Omega Partners"
+    ],
+    "contractValue": "$118000",
+    "startDate": "2026-03-17",
+    "endDate": "2027-03-17",
+    "governingLaw": "England and Wales",
+    "paymentTerms": "Net 45",
+    "liabilityLimit": "Amount paid in the past 12 months"
+  },
+  "contract05.txt": {
+    "parties": [
+      "MegaCorp",
+      "SmallBiz"
+    ],
+    "contractValue": "$176000",
+    "startDate": "2026-05-15",
+    "endDate": "2027-05-15",
+    "governingLaw": "Delaware",
+    "paymentTerms": "Net 60",
+    "liabilityLimit": "1x Contract Value"
+  },
+  "contract06.txt": {
+    "parties": [
+      "Global Tech",
+      "Startup Inc"
+    ],
+    "contractValue": "$441000",
+    "startDate": "2026-02-22",
+    "endDate": "2027-02-22",
+    "governingLaw": "Delaware",
+    "paymentTerms": "Net 30",
+    "liabilityLimit": "$50,000"
+  },
+  "contract07.txt": {
+    "parties": [
+      "Alpha LLC",
+      "Omega Partners"
+    ],
+    "contractValue": "$473000",
+    "startDate": "2026-02-23",
+    "endDate": "2027-02-23",
+    "governingLaw": "Washington",
+    "paymentTerms": "Net 60",
+    "liabilityLimit": "1x Contract Value"
+  },
+  "contract08.txt": {
+    "parties": [
+      "Global Tech",
+      "Startup Inc"
+    ],
+    "contractValue": "$359000",
+    "startDate": "2026-05-20",
+    "endDate": "2027-05-20",
+    "governingLaw": "England and Wales",
+    "paymentTerms": "Net 30",
+    "liabilityLimit": "$10,000"
+  },
+  "contract09.txt": {
+    "parties": [
+      "Acme Corp",
+      "Beta Solutions"
+    ],
+    "contractValue": "$478000",
+    "startDate": "2026-05-14",
+    "endDate": "2027-05-14",
+    "governingLaw": "Delaware",
+    "paymentTerms": "Net 15",
+    "liabilityLimit": "1x Contract Value"
+  },
+  "contract10.txt": {
+    "parties": [
+      "Global Tech",
+      "Startup Inc"
+    ],
+    "contractValue": "$325000",
+    "startDate": "2026-02-09",
+    "endDate": "2027-02-09",
+    "governingLaw": "New York",
+    "paymentTerms": "Net 45",
+    "liabilityLimit": "$50,000"
+  },
+  "contract11.txt": {
+    "parties": [
+      "Global Tech",
+      "Startup Inc"
+    ],
+    "contractValue": "$32000",
+    "startDate": "2026-06-10",
+    "endDate": "2027-06-10",
+    "governingLaw": "Delaware",
+    "paymentTerms": "Due on receipt",
+    "liabilityLimit": "Amount paid in the past 12 months"
+  },
+  "contract12.txt": {
+    "parties": [
+      "Alpha LLC",
+      "Omega Partners"
+    ],
+    "contractValue": "$150000",
+    "startDate": "2026-05-07",
+    "endDate": "2027-05-07",
+    "governingLaw": "California",
+    "paymentTerms": "Net 30",
+    "liabilityLimit": "$10,000"
+  },
+  "contract13.txt": {
+    "parties": [
+      "Acme Corp",
+      "Beta Solutions"
+    ],
+    "contractValue": "$302000",
+    "startDate": "2026-05-26",
+    "endDate": "2027-05-26",
+    "governingLaw": "Washington",
+    "paymentTerms": "Net 60",
+    "liabilityLimit": "$50,000"
+  },
+  "contract14.txt": {
+    "parties": [
+      "Alpha LLC",
+      "Omega Partners"
+    ],
+    "contractValue": "$262000",
+    "startDate": "2026-02-17",
+    "endDate": "2027-02-17",
+    "governingLaw": "Washington",
+    "paymentTerms": "Net 15",
+    "liabilityLimit": "Amount paid in the past 12 months"
+  },
+  "contract15.txt": {
+    "parties": [
+      "Acme Corp",
+      "Beta Solutions"
+    ],
+    "contractValue": "$151000",
+    "startDate": "2026-05-12",
+    "endDate": "2027-05-12",
+    "governingLaw": "California",
+    "paymentTerms": "Net 15",
+    "liabilityLimit": "1x Contract Value"
+  },
+  "contract16.txt": {
+    "parties": [
+      "Alpha LLC",
+      "Omega Partners"
+    ],
+    "contractValue": "$49000",
+    "startDate": "2026-03-18",
+    "endDate": "2027-03-18",
+    "governingLaw": "Washington",
+    "paymentTerms": "Net 60",
+    "liabilityLimit": "$50,000"
+  },
+  "contract17.txt": {
+    "parties": [
+      "Alpha LLC",
+      "Omega Partners"
+    ],
+    "contractValue": "$372000",
+    "startDate": "2026-06-16",
+    "endDate": "2027-06-16",
+    "governingLaw": "Washington",
+    "paymentTerms": "Net 15",
+    "liabilityLimit": "1x Contract Value"
+  },
+  "contract18.txt": {
+    "parties": [
+      "Alpha LLC",
+      "Omega Partners"
+    ],
+    "contractValue": "$156000",
+    "startDate": "2026-03-08",
+    "endDate": "2027-03-08",
+    "governingLaw": "Washington",
+    "paymentTerms": "Net 30",
+    "liabilityLimit": "Unlimited"
+  },
+  "contract19.txt": {
+    "parties": [
+      "Acme Corp",
+      "Beta Solutions"
+    ],
+    "contractValue": "$71000",
+    "startDate": "2026-06-18",
+    "endDate": "2027-06-18",
+    "governingLaw": "Washington",
+    "paymentTerms": "Net 45",
+    "liabilityLimit": "Amount paid in the past 12 months"
+  },
+  "contract20.txt": {
+    "parties": [
+      "DataWorks",
+      "CloudHost"
+    ],
+    "contractValue": "$377000",
+    "startDate": "2026-05-05",
+    "endDate": "2027-05-05",
+    "governingLaw": "New York",
+    "paymentTerms": "Net 15",
+    "liabilityLimit": "Amount paid in the past 12 months"
+  },
+  "contract21.txt": {
+    "parties": [
+      "Acme Corp",
+      "Beta Solutions"
+    ],
+    "contractValue": "$483000",
+    "startDate": "2026-01-16",
+    "endDate": "2027-01-16",
+    "governingLaw": "England and Wales",
+    "paymentTerms": "Net 60",
+    "liabilityLimit": "1x Contract Value"
+  },
+  "contract22.txt": {
+    "parties": [
+      "MegaCorp",
+      "SmallBiz"
+    ],
+    "contractValue": "$242000",
+    "startDate": "2026-03-25",
+    "endDate": "2027-03-25",
+    "governingLaw": "Delaware",
+    "paymentTerms": "Net 45",
+    "liabilityLimit": "1x Contract Value"
+  },
+  "contract23.txt": {
+    "parties": [
+      "Global Tech",
+      "Startup Inc"
+    ],
+    "contractValue": "$78000",
+    "startDate": "2026-03-09",
+    "endDate": "2027-03-09",
+    "governingLaw": "England and Wales",
+    "paymentTerms": "Net 45",
+    "liabilityLimit": "1x Contract Value"
+  },
+  "contract24.txt": {
+    "parties": [
+      "Alpha LLC",
+      "Omega Partners"
+    ],
+    "contractValue": "$423000",
+    "startDate": "2026-06-05",
+    "endDate": "2027-06-05",
+    "governingLaw": "Texas",
+    "paymentTerms": "Net 30",
+    "liabilityLimit": "Unlimited"
+  },
+  "contract25.txt": {
+    "parties": [
+      "Acme Corp",
+      "Beta Solutions"
+    ],
+    "contractValue": "$135000",
+    "startDate": "2026-05-03",
+    "endDate": "2027-05-03",
+    "governingLaw": "New York",
+    "paymentTerms": "Net 15",
+    "liabilityLimit": "$10,000"
+  }
+}

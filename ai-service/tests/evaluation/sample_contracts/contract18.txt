@@ -1,0 +1,19 @@
+--- SOFTWARE AGREEMENT ---
+
+This Software Agreement is entered into as of March 08, 2026 (the 'Start Date') between Alpha LLC and Omega Partners.
+
+1. GOVERNING LAW
+This agreement shall be governed by the laws of Washington.
+
+2. PAYMENT TERMS
+The total contract value is $156000. Payment is Net 30.
+
+3. LIABILITY LIMIT
+Liability is capped at Unlimited.
+
+4. TERM
+This agreement terminates on March 08, 2027 (the 'End Date').
+
+5. CONFIDENTIALITY
+Both parties agree to maintain strict confidentiality of all data shared.
+

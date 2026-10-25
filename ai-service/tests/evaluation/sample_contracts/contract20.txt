@@ -1,0 +1,19 @@
+--- LICENSING AGREEMENT ---
+
+This Licensing Agreement is entered into as of May 05, 2026 (the 'Start Date') between DataWorks and CloudHost.
+
+1. GOVERNING LAW
+This agreement shall be governed by the laws of New York.
+
+2. PAYMENT TERMS
+The total contract value is $377000. Payment is Net 15.
+
+3. LIABILITY LIMIT
+Liability is capped at Amount paid in the past 12 months.
+
+4. TERM
+This agreement terminates on May 05, 2027 (the 'End Date').
+
+5. CONFIDENTIALITY
+Both parties agree to maintain strict confidentiality of all data shared.
+

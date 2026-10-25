@@ -1,0 +1,19 @@
+--- SOFTWARE AGREEMENT ---
+
+This Software Agreement is entered into as of June 18, 2026 (the 'Start Date') between Acme Corp and Beta Solutions.
+
+1. GOVERNING LAW
+This agreement shall be governed by the laws of Washington.
+
+2. PAYMENT TERMS
+The total contract value is $71000. Payment is Net 45.
+
+3. LIABILITY LIMIT
+Liability is capped at Amount paid in the past 12 months.
+
+4. TERM
+This agreement terminates on June 18, 2027 (the 'End Date').
+
+5. CONFIDENTIALITY
+Both parties agree to maintain strict confidentiality of all data shared.
+

@@ -1,0 +1,352 @@
+[
+  {
+    "contractId": "contract01",
+    "question": "What is the liability limit?",
+    "expectedAnswerKeywords": [
+      "Unlimited"
+    ]
+  },
+  {
+    "contractId": "contract01",
+    "question": "What is the governing law?",
+    "expectedAnswerKeywords": [
+      "California"
+    ]
+  },
+  {
+    "contractId": "contract02",
+    "question": "What is the liability limit?",
+    "expectedAnswerKeywords": [
+      "$10,000"
+    ]
+  },
+  {
+    "contractId": "contract02",
+    "question": "What is the governing law?",
+    "expectedAnswerKeywords": [
+      "New York"
+    ]
+  },
+  {
+    "contractId": "contract03",
+    "question": "What is the liability limit?",
+    "expectedAnswerKeywords": [
+      "Unlimited"
+    ]
+  },
+  {
+    "contractId": "contract03",
+    "question": "What is the governing law?",
+    "expectedAnswerKeywords": [
+      "Delaware"
+    ]
+  },
+  {
+    "contractId": "contract04",
+    "question": "What is the liability limit?",
+    "expectedAnswerKeywords": [
+      "Amount paid in the past 12 months"
+    ]
+  },
+  {
+    "contractId": "contract04",
+    "question": "What is the governing law?",
+    "expectedAnswerKeywords": [
+      "England and Wales"
+    ]
+  },
+  {
+    "contractId": "contract05",
+    "question": "What is the liability limit?",
+    "expectedAnswerKeywords": [
+      "1x Contract Value"
+    ]
+  },
+  {
+    "contractId": "contract05",
+    "question": "What is the governing law?",
+    "expectedAnswerKeywords": [
+      "Delaware"
+    ]
+  },
+  {
+    "contractId": "contract06",
+    "question": "What is the liability limit?",
+    "expectedAnswerKeywords": [
+      "$50,000"
+    ]
+  },
+  {
+    "contractId": "contract06",
+    "question": "What is the governing law?",
+    "expectedAnswerKeywords": [
+      "Delaware"
+    ]
+  },
+  {
+    "contractId": "contract07",
+    "question": "What is the liability limit?",
+    "expectedAnswerKeywords": [
+      "1x Contract Value"
+    ]
+  },
+  {
+    "contractId": "contract07",
+    "question": "What is the governing law?",
+    "expectedAnswerKeywords": [
+      "Washington"
+    ]
+  },
+  {
+    "contractId": "contract08",
+    "question": "What is the liability limit?",
+    "expectedAnswerKeywords": [
+      "$10,000"
+    ]
+  },
+  {
+    "contractId": "contract08",
+    "question": "What is the governing law?",
+    "expectedAnswerKeywords": [
+      "England and Wales"
+    ]
+  },
+  {
+    "contractId": "contract09",
+    "question": "What is the liability limit?",
+    "expectedAnswerKeywords": [
+      "1x Contract Value"
+    ]
+  },
+  {
+    "contractId": "contract09",
+    "question": "What is the governing law?",
+    "expectedAnswerKeywords": [
+      "Delaware"
+    ]
+  },
+  {
+    "contractId": "contract10",
+    "question": "What is the liability limit?",
+    "expectedAnswerKeywords": [
+      "$50,000"
+    ]
+  },
+  {
+    "contractId": "contract10",
+    "question": "What is the governing law?",
+    "expectedAnswerKeywords": [
+      "New York"
+    ]
+  },
+  {
+    "contractId": "contract11",
+    "question": "What is the liability limit?",
+    "expectedAnswerKeywords": [
+      "Amount paid in the past 12 months"
+    ]
+  },
+  {
+    "contractId": "contract11",
+    "question": "What is the governing law?",
+    "expectedAnswerKeywords": [
+      "Delaware"
+    ]
+  },
+  {
+    "contractId": "contract12",
+    "question": "What is the liability limit?",
+    "expectedAnswerKeywords": [
+      "$10,000"
+    ]
+  },
+  {
+    "contractId": "contract12",
+    "question": "What is the governing law?",
+    "expectedAnswerKeywords": [
+      "California"
+    ]
+  },
+  {
+    "contractId": "contract13",
+    "question": "What is the liability limit?",
+    "expectedAnswerKeywords": [
+      "$50,000"
+    ]
+  },
+  {
+    "contractId": "contract13",
+    "question": "What is the governing law?",
+    "expectedAnswerKeywords": [
+      "Washington"
+    ]
+  },
+  {
+    "contractId": "contract14",
+    "question": "What is the liability limit?",
+    "expectedAnswerKeywords": [
+      "Amount paid in the past 12 months"
+    ]
+  },
+  {
+    "contractId": "contract14",
+    "question": "What is the governing law?",
+    "expectedAnswerKeywords": [
+      "Washington"
+    ]
+  },
+  {
+    "contractId": "contract15",
+    "question": "What is the liability limit?",
+    "expectedAnswerKeywords": [
+      "1x Contract Value"
+    ]
+  },
+  {
+    "contractId": "contract15",
+    "question": "What is the governing law?",
+    "expectedAnswerKeywords": [
+      "California"
+    ]
+  },
+  {
+    "contractId": "contract16",
+    "question": "What is the liability limit?",
+    "expectedAnswerKeywords": [
+      "$50,000"
+    ]
+  },
+  {
+    "contractId": "contract16",
+    "question": "What is the governing law?",
+    "expectedAnswerKeywords": [
+      "Washington"
+    ]
+  },
+  {
+    "contractId": "contract17",
+    "question": "What is the liability limit?",
+    "expectedAnswerKeywords": [
+      "1x Contract Value"
+    ]
+  },
+  {
+    "contractId": "contract17",
+    "question": "What is the governing law?",
+    "expectedAnswerKeywords": [
+      "Washington"
+    ]
+  },
+  {
+    "contractId": "contract18",
+    "question": "What is the liability limit?",
+    "expectedAnswerKeywords": [
+      "Unlimited"
+    ]
+  },
+  {
+    "contractId": "contract18",
+    "question": "What is the governing law?",
+    "expectedAnswerKeywords": [
+      "Washington"
+    ]
+  },
+  {
+    "contractId": "contract19",
+    "question": "What is the liability limit?",
+    "expectedAnswerKeywords": [
+      "Amount paid in the past 12 months"
+    ]
+  },
+  {
+    "contractId": "contract19",
+    "question": "What is the governing law?",
+    "expectedAnswerKeywords": [
+      "Washington"
+    ]
+  },
+  {
+    "contractId": "contract20",
+    "question": "What is the liability limit?",
+    "expectedAnswerKeywords": [
+      "Amount paid in the past 12 months"
+    ]
+  },
+  {
+    "contractId": "contract20",
+    "question": "What is the governing law?",
+    "expectedAnswerKeywords": [
+      "New York"
+    ]
+  },
+  {
+    "contractId": "contract21",
+    "question": "What is the liability limit?",
+    "expectedAnswerKeywords": [
+      "1x Contract Value"
+    ]
+  },
+  {
+    "contractId": "contract21",
+    "question": "What is the governing law?",
+    "expectedAnswerKeywords": [
+      "England and Wales"
+    ]
+  },
+  {
+    "contractId": "contract22",
+    "question": "What is the liability limit?",
+    "expectedAnswerKeywords": [
+      "1x Contract Value"
+    ]
+  },
+  {
+    "contractId": "contract22",
+    "question": "What is the governing law?",
+    "expectedAnswerKeywords": [
+      "Delaware"
+    ]
+  },
+  {
+    "contractId": "contract23",
+    "question": "What is the liability limit?",
+    "expectedAnswerKeywords": [
+      "1x Contract Value"
+    ]
+  },
+  {
+    "contractId": "contract23",
+    "question": "What is the governing law?",
+    "expectedAnswerKeywords": [
+      "England and Wales"
+    ]
+  },
+  {
+    "contractId": "contract24",
+    "question": "What is the liability limit?",
+    "expectedAnswerKeywords": [
+      "Unlimited"
+    ]
+  },
+  {
+    "contractId": "contract24",
+    "question": "What is the governing law?",
+    "expectedAnswerKeywords": [
+      "Texas"
+    ]
+  },
+  {
+    "contractId": "contract25",
+    "question": "What is the liability limit?",
+    "expectedAnswerKeywords": [
+      "$10,000"
+    ]
+  },
+  {
+    "contractId": "contract25",
+    "question": "What is the governing law?",
+    "expectedAnswerKeywords": [
+      "New York"
+    ]
+  }
+]

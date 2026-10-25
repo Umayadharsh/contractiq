@@ -1,0 +1,518 @@
+[
+  {
+    "action": {
+      "type": "upload_contract"
+    },
+    "context": {
+      "event": "upload"
+    },
+    "database": [],
+    "expectedDecision": "block",
+    "description": "No policies, defaults to deny"
+  },
+  {
+    "action": {
+      "type": "upload_contract"
+    },
+    "context": {
+      "event": "upload",
+      "workspaceId": "ws-1"
+    },
+    "database": [
+      {
+        "policyId": "P1",
+        "isActive": true,
+        "workspaceId": "ws-1",
+        "action": {
+          "type": "upload_contract"
+        },
+        "trigger": {
+          "event": "upload"
+        },
+        "decision": "auto_approve"
+      }
+    ],
+    "expectedDecision": "allow",
+    "description": "Simple auto_approve policy matches event"
+  },
+  {
+    "action": {
+      "type": "delete_contract"
+    },
+    "context": {
+      "event": "delete",
+      "workspaceId": "ws-1"
+    },
+    "database": [
+      {
+        "policyId": "P1",
+        "isActive": true,
+        "workspaceId": "ws-1",
+        "action": {
+          "type": "delete_contract"
+        },
+        "decision": "auto_approve",
+        "priority": 1
+      },
+      {
+        "policyId": "P2",
+        "isActive": true,
+        "workspaceId": "ws-1",
+        "action": {
+          "type": "delete_contract"
+        },
+        "decision": "deny",
+        "priority": 10
+      }
+    ],
+    "expectedDecision": "block",
+    "description": "High priority deny overrides low priority allow"
+  },
+  {
+    "action": {
+      "type": "upload_contract"
+    },
+    "context": {
+      "event": "upload",
+      "workspaceId": "ws-1"
+    },
+    "database": [
+      {
+        "policyId": "P1",
+        "isActive": false,
+        "workspaceId": "ws-1",
+        "action": {
+          "type": "upload_contract"
+        },
+        "decision": "auto_approve"
+      }
+    ],
+    "expectedDecision": "block",
+    "description": "Inactive policy is ignored, results in default deny"
+  },
+  {
+    "action": {
+      "type": "evaluate_contract"
+    },
+    "context": {
+      "event": "evaluate",
+      "workspaceId": "ws-1",
+      "assessments": [
+        {
+          "riskFlag": "Deviation"
+        }
+      ]
+    },
+    "database": [
+      {
+        "policyId": "P1",
+        "isActive": true,
+        "workspaceId": "ws-1",
+        "action": {
+          "type": "evaluate_contract"
+        },
+        "trigger": {
+          "riskFlags": [
+            "Deviation"
+          ]
+        },
+        "decision": "escalate"
+      }
+    ],
+    "expectedDecision": "escalate",
+    "description": "Escalates when context assessment has specific riskFlag"
+  },
+  {
+    "action": {
+      "type": "evaluate_contract"
+    },
+    "context": {
+      "event": "evaluate",
+      "workspaceId": "ws-1",
+      "assessments": [
+        {
+          "severity": "Critical"
+        }
+      ]
+    },
+    "database": [
+      {
+        "policyId": "P1",
+        "isActive": true,
+        "workspaceId": "ws-1",
+        "action": {
+          "type": "evaluate_contract"
+        },
+        "trigger": {
+          "severities": [
+            "Critical"
+          ]
+        },
+        "decision": "escalate"
+      }
+    ],
+    "expectedDecision": "escalate",
+    "description": "Escalates on Critical severity"
+  },
+  {
+    "action": {
+      "type": "modify_policy"
+    },
+    "context": {
+      "event": "modify",
+      "workspaceId": "ws-1"
+    },
+    "database": [
+      {
+        "policyId": "P1",
+        "isActive": true,
+        "workspaceId": "ws-1",
+        "action": {
+          "type": "modify_policy"
+        },
+        "decision": "auto_approve",
+        "approval": {
+          "required": true
+        }
+      }
+    ],
+    "expectedDecision": "escalate",
+    "description": "Even if decision is auto_approve, approval required -> escalate"
+  },
+  {
+    "action": {
+      "type": "upload_contract"
+    },
+    "context": {
+      "event": "upload",
+      "workspaceId": "ws-2"
+    },
+    "database": [
+      {
+        "policyId": "P1",
+        "isActive": true,
+        "workspaceId": "ws-1",
+        "action": {
+          "type": "upload_contract"
+        },
+        "decision": "auto_approve"
+      }
+    ],
+    "expectedDecision": "block",
+    "description": "Policy workspace does not match context workspace"
+  },
+  {
+    "action": {
+      "type": "sign_contract"
+    },
+    "context": {
+      "event": "sign",
+      "workspaceId": "ws-1",
+      "assessments": [
+        {
+          "category": "Finance"
+        }
+      ]
+    },
+    "database": [
+      {
+        "policyId": "P1",
+        "isActive": true,
+        "workspaceId": "ws-1",
+        "action": {
+          "type": "sign_contract"
+        },
+        "trigger": {
+          "categories": [
+            "Finance"
+          ]
+        },
+        "decision": "auto_approve"
+      }
+    ],
+    "expectedDecision": "allow",
+    "description": "Matches on specific category"
+  },
+  {
+    "action": {
+      "type": "sign_contract"
+    },
+    "context": {
+      "event": "sign",
+      "workspaceId": "ws-1",
+      "assessments": [
+        {
+          "category": "Legal"
+        }
+      ]
+    },
+    "database": [
+      {
+        "policyId": "P1",
+        "isActive": true,
+        "workspaceId": "ws-1",
+        "action": {
+          "type": "sign_contract"
+        },
+        "trigger": {
+          "categories": [
+            "Finance"
+          ]
+        },
+        "decision": "auto_approve"
+      }
+    ],
+    "expectedDecision": "block",
+    "description": "Does not match required category"
+  },
+  {
+    "action": {
+      "type": "action_11"
+    },
+    "context": {
+      "event": "event_11",
+      "workspaceId": "ws-1"
+    },
+    "database": [
+      {
+        "policyId": "P11",
+        "isActive": true,
+        "workspaceId": "ws-1",
+        "action": {
+          "type": "action_11"
+        },
+        "trigger": {
+          "event": "event_11"
+        },
+        "decision": "escalate"
+      }
+    ],
+    "expectedDecision": "escalate",
+    "description": "Generated realistic scenario 11"
+  },
+  {
+    "action": {
+      "type": "action_12"
+    },
+    "context": {
+      "event": "event_12",
+      "workspaceId": "ws-1"
+    },
+    "database": [
+      {
+        "policyId": "P12",
+        "isActive": true,
+        "workspaceId": "ws-1",
+        "action": {
+          "type": "action_12"
+        },
+        "trigger": {
+          "event": "event_12"
+        },
+        "decision": "auto_approve"
+      }
+    ],
+    "expectedDecision": "allow",
+    "description": "Generated realistic scenario 12"
+  },
+  {
+    "action": {
+      "type": "action_13"
+    },
+    "context": {
+      "event": "event_13",
+      "workspaceId": "ws-1"
+    },
+    "database": [
+      {
+        "policyId": "P13",
+        "isActive": true,
+        "workspaceId": "ws-1",
+        "action": {
+          "type": "action_13"
+        },
+        "trigger": {
+          "event": "event_13"
+        },
+        "decision": "escalate"
+      }
+    ],
+    "expectedDecision": "escalate",
+    "description": "Generated realistic scenario 13"
+  },
+  {
+    "action": {
+      "type": "action_14"
+    },
+    "context": {
+      "event": "event_14",
+      "workspaceId": "ws-1"
+    },
+    "database": [
+      {
+        "policyId": "P14",
+        "isActive": true,
+        "workspaceId": "ws-1",
+        "action": {
+          "type": "action_14"
+        },
+        "trigger": {
+          "event": "event_14"
+        },
+        "decision": "auto_approve"
+      }
+    ],
+    "expectedDecision": "allow",
+    "description": "Generated realistic scenario 14"
+  },
+  {
+    "action": {
+      "type": "action_15"
+    },
+    "context": {
+      "event": "event_15",
+      "workspaceId": "ws-1"
+    },
+    "database": [
+      {
+        "policyId": "P15",
+        "isActive": true,
+        "workspaceId": "ws-1",
+        "action": {
+          "type": "action_15"
+        },
+        "trigger": {
+          "event": "event_15"
+        },
+        "decision": "escalate"
+      }
+    ],
+    "expectedDecision": "escalate",
+    "description": "Generated realistic scenario 15"
+  },
+  {
+    "action": {
+      "type": "action_16"
+    },
+    "context": {
+      "event": "event_16",
+      "workspaceId": "ws-1"
+    },
+    "database": [
+      {
+        "policyId": "P16",
+        "isActive": true,
+        "workspaceId": "ws-1",
+        "action": {
+          "type": "action_16"
+        },
+        "trigger": {
+          "event": "event_16"
+        },
+        "decision": "auto_approve"
+      }
+    ],
+    "expectedDecision": "allow",
+    "description": "Generated realistic scenario 16"
+  },
+  {
+    "action": {
+      "type": "action_17"
+    },
+    "context": {
+      "event": "event_17",
+      "workspaceId": "ws-1"
+    },
+    "database": [
+      {
+        "policyId": "P17",
+        "isActive": true,
+        "workspaceId": "ws-1",
+        "action": {
+          "type": "action_17"
+        },
+        "trigger": {
+          "event": "event_17"
+        },
+        "decision": "escalate"
+      }
+    ],
+    "expectedDecision": "escalate",
+    "description": "Generated realistic scenario 17"
+  },
+  {
+    "action": {
+      "type": "action_18"
+    },
+    "context": {
+      "event": "event_18",
+      "workspaceId": "ws-1"
+    },
+    "database": [
+      {
+        "policyId": "P18",
+        "isActive": true,
+        "workspaceId": "ws-1",
+        "action": {
+          "type": "action_18"
+        },
+        "trigger": {
+          "event": "event_18"
+        },
+        "decision": "auto_approve"
+      }
+    ],
+    "expectedDecision": "allow",
+    "description": "Generated realistic scenario 18"
+  },
+  {
+    "action": {
+      "type": "action_19"
+    },
+    "context": {
+      "event": "event_19",
+      "workspaceId": "ws-1"
+    },
+    "database": [
+      {
+        "policyId": "P19",
+        "isActive": true,
+        "workspaceId": "ws-1",
+        "action": {
+          "type": "action_19"
+        },
+        "trigger": {
+          "event": "event_19"
+        },
+        "decision": "escalate"
+      }
+    ],
+    "expectedDecision": "escalate",
+    "description": "Generated realistic scenario 19"
+  },
+  {
+    "action": {
+      "type": "action_20"
+    },
+    "context": {
+      "event": "event_20",
+      "workspaceId": "ws-1"
+    },
+    "database": [
+      {
+        "policyId": "P20",
+        "isActive": true,
+        "workspaceId": "ws-1",
+        "action": {
+          "type": "action_20"
+        },
+        "trigger": {
+          "event": "event_20"
+        },
+        "decision": "auto_approve"
+      }
+    ],
+    "expectedDecision": "allow",
+    "description": "Generated realistic scenario 20"
+  }
+]

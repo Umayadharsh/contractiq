@@ -1,0 +1,19 @@
+--- SERVICE AGREEMENT ---
+
+This Service Agreement is entered into as of April 17, 2026 (the 'Start Date') between Alpha LLC and Omega Partners.
+
+1. GOVERNING LAW
+This agreement shall be governed by the laws of Delaware.
+
+2. PAYMENT TERMS
+The total contract value is $268000. Payment is Net 45.
+
+3. LIABILITY LIMIT
+Liability is capped at Unlimited.
+
+4. TERM
+This agreement terminates on April 17, 2027 (the 'End Date').
+
+5. CONFIDENTIALITY
+Both parties agree to maintain strict confidentiality of all data shared.
+
