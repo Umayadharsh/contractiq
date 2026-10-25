@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import './App.css'
 import AuditLogs from './pages/AuditLogs'
+import AppShell from './components/layout/AppShell'
+import Dashboard from './pages/Dashboard'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000'
 
@@ -20,7 +22,7 @@ function formatReviewState(field) {
 function App() {
   const [session, setSession] = useState(() => JSON.parse(localStorage.getItem('contractiq-session') || 'null'))
   const [mode, setMode] = useState('login')
-  const [activeTab, setActiveTab] = useState('contracts') // 'contracts' | 'playbook'
+  const [activeTab, setActiveTab] = useState('dashboard') // 'dashboard' | 'contracts' | 'playbook'
   const [contracts, setContracts] = useState([])
   const [playbookRules, setPlaybookRules] = useState([])
   const [selectedContractId, setSelectedContractId] = useState(null)
@@ -360,53 +362,28 @@ function App() {
   }
 
   return (
-    <main className="app-shell">
-      <header>
-        <div>
-          <p className="eyebrow">CONTRACTIQ / GUARD</p>
-          <h1>Contract & Risk Compliance Workspace</h1>
-        </div>
-        <div className="header-actions">
-          <button className={`outline ${activeTab === 'contracts' ? 'active' : ''}`} onClick={() => setActiveTab('contracts')}>
-            📄 Contracts
-          </button>
-          {session.user.role === 'Admin' && (
-            <button className={`outline ${activeTab === 'playbook' ? 'active' : ''}`} onClick={() => setActiveTab('playbook')}>
-              🛡️ Company Playbook (Admin)
-            </button>
-          )}
-          {session.user.role === 'Admin' && (
-            <button className={`outline ${activeTab === 'agentguard' ? 'active' : ''}`} onClick={() => setActiveTab('agentguard')}>
-              ⚙️ AgentGuard Policies
-            </button>
-          )}
-          {session.user.role === 'Admin' && (
-            <button className={`outline ${activeTab === 'auditlogs' ? 'active' : ''}`} onClick={() => setActiveTab('auditlogs')}>
-              📋 Audit Logs
-            </button>
-          )}
-          {session.user.role !== 'Viewer' && (
-            <button className={`outline ${activeTab === 'pending' ? 'active' : ''}`} onClick={() => setActiveTab('pending')}>
-              ⏳ Pending Approval ({pendingActions.length})
-            </button>
-          )}
-          <span>
-            {session.user.name} · <strong>{session.user.role}</strong>
-          </span>
-          <button
-            className="outline"
-            onClick={() => {
-              localStorage.removeItem('contractiq-session')
-              setSession(null)
-            }}
-          >
-            Sign out
-          </button>
-        </div>
-      </header>
-
-      {/* --- PLAYBOOK ADMIN TAB --- */}
-      {activeTab === 'auditlogs' && session.user.role === 'Admin' ? (
+    <AppShell
+      activeTab={activeTab}
+      setActiveTab={setActiveTab}
+      session={session}
+      contractCount={contracts.length}
+      pendingCount={pendingActions.length}
+      message={message}
+      onClearMessage={() => setMessage('')}
+      onSignOut={() => {
+        localStorage.removeItem('contractiq-session')
+        setSession(null)
+      }}
+    >
+      {activeTab === 'dashboard' ? (
+        <Dashboard
+          contracts={contracts}
+          pendingActions={pendingActions}
+          session={session}
+          onSelectContract={selectContract}
+          onNavigate={(tab) => setActiveTab(tab)}
+        />
+      ) : activeTab === 'auditlogs' && session.user.role === 'Admin' ? (
         <AuditLogs session={session} />
       ) : activeTab === 'agentguard' && session.user.role === 'Admin' ? (
         <section className="content-grid">
@@ -895,7 +872,7 @@ function App() {
           )}
         </>
       )}
-    </main>
+    </AppShell>
   )
 }
 
