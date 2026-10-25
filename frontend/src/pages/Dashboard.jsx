@@ -154,12 +154,23 @@ export default function Dashboard({
         {/* Total Approved Contracts */}
         <div
           className="ciq-card"
+          onClick={() => onNavigate && onNavigate('contracts', 'Approved')}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              onNavigate && onNavigate('contracts', 'Approved');
+            }
+          }}
           style={{
             padding: '1.5rem',
             display: 'flex',
             alignItems: 'flex-start',
             justifyContent: 'space-between',
+            cursor: 'pointer',
           }}
+          title="View approved contracts"
         >
           <div>
             <span style={{ fontSize: '0.8rem', color: 'var(--ciq-text-muted)', fontWeight: 600 }}>

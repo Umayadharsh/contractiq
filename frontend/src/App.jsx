@@ -24,6 +24,7 @@ function App() {
   const [mode, setMode] = useState('login')
   const [activeTab, setActiveTab] = useState('dashboard') // 'dashboard' | 'contracts' | 'playbook'
   const [contracts, setContracts] = useState([])
+  const [contractStatusFilter, setContractStatusFilter] = useState('All')
   const [playbookRules, setPlaybookRules] = useState([])
   const [selectedContractId, setSelectedContractId] = useState(null)
   const [message, setMessage] = useState('')
@@ -52,6 +53,18 @@ function App() {
     isActive: true,
   })
 
+  const filteredContracts = useMemo(() => {
+    if (contractStatusFilter === 'All') return contracts
+    if (contractStatusFilter === 'Approved') {
+      return contracts.filter((c) => String(c.status || '').trim().toLowerCase() === 'approved')
+    }
+    return contracts.filter((c) => String(c.status || '').trim().toLowerCase() === contractStatusFilter.toLowerCase())
+  }, [contracts, contractStatusFilter])
+
+  const approvedContractsCount = useMemo(() => {
+    return contracts.filter((c) => String(c.status || '').trim().toLowerCase() === 'approved').length
+  }, [contracts])
+
   useEffect(() => {
     if (session) {
       loadContracts()
@@ -63,10 +76,11 @@ function App() {
 
   useEffect(() => {
     if (!contracts.length) return setSelectedContractId(null)
-    if (!selectedContractId || !contracts.some((contract) => contract._id === selectedContractId)) {
-      setSelectedContractId(contracts[0]._id)
+    const list = filteredContracts.length ? filteredContracts : contracts
+    if (!selectedContractId || !list.some((contract) => contract._id === selectedContractId)) {
+      setSelectedContractId(list[0]._id)
     }
-  }, [contracts, selectedContractId])
+  }, [contracts, filteredContracts, selectedContractId])
 
   async function loadContracts() {
     const response = await fetch(`${API_URL}/api/contracts`, { headers: { Authorization: `Bearer ${session.token}` } })
@@ -381,7 +395,12 @@ function App() {
           pendingActions={pendingActions}
           session={session}
           onSelectContract={selectContract}
-          onNavigate={(tab) => setActiveTab(tab)}
+          onNavigate={(tab, statusFilter) => {
+            if (statusFilter !== undefined) {
+              setContractStatusFilter(statusFilter)
+            }
+            setActiveTab(tab)
+          }}
         />
       ) : activeTab === 'auditlogs' && session.user.role === 'Admin' ? (
         <AuditLogs session={session} />
@@ -587,13 +606,66 @@ function App() {
             <div className="table-panel">
               <div className="section-heading">
                 <div>
-                  <p className="eyebrow">{contracts.length} DOCUMENTS</p>
+                  <p className="eyebrow">{filteredContracts.length} {contractStatusFilter !== 'All' ? `${contractStatusFilter.toUpperCase()} ` : ''}DOCUMENTS</p>
                   <h2>{contractListMeta.heading}</h2>
                   <p className="muted">{contractListMeta.note}</p>
                 </div>
                 <span className="status-dot">● {session.user.role} view</span>
               </div>
-              {contracts.length ? (
+
+              {/* Status Filter Bar */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', margin: '1rem 0 1.25rem', flexWrap: 'wrap' }}>
+                <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#636B55' }}>Filter status:</span>
+                <button
+                  type="button"
+                  className={`outline ${contractStatusFilter === 'All' ? 'active' : ''}`}
+                  onClick={() => setContractStatusFilter('All')}
+                  style={{ padding: '0.35rem 0.75rem', fontSize: '0.78rem' }}
+                >
+                  All ({contracts.length})
+                </button>
+                <button
+                  type="button"
+                  className={`outline ${contractStatusFilter === 'Approved' ? 'active' : ''}`}
+                  onClick={() => setContractStatusFilter('Approved')}
+                  style={{ padding: '0.35rem 0.75rem', fontSize: '0.78rem' }}
+                >
+                  Approved ({approvedContractsCount})
+                </button>
+                <select
+                  value={['All', 'Approved'].includes(contractStatusFilter) ? '' : contractStatusFilter}
+                  onChange={(e) => e.target.value && setContractStatusFilter(e.target.value)}
+                  style={{
+                    padding: '0.35rem 0.65rem',
+                    borderRadius: '4px',
+                    border: '1px solid #A6B08F',
+                    fontSize: '0.78rem',
+                    background: '#FAF7F0',
+                    color: '#3F472C',
+                    cursor: 'pointer'
+                  }}
+                  aria-label="More contract status filters"
+                >
+                  <option value="">More filters...</option>
+                  <option value="Waiting for Approval">Waiting for Approval</option>
+                  <option value="NeedsReview">Needs Review</option>
+                  <option value="Waiting for Evaluation">Waiting for Evaluation</option>
+                  <option value="Failed">Failed</option>
+                  <option value="Rejected">Rejected</option>
+                </select>
+                {contractStatusFilter !== 'All' && (
+                  <button
+                    type="button"
+                    className="text-button"
+                    onClick={() => setContractStatusFilter('All')}
+                    style={{ fontSize: '0.78rem', marginLeft: '0.25rem' }}
+                  >
+                    Clear filter
+                  </button>
+                )}
+              </div>
+
+              {filteredContracts.length ? (
                 <div className="table-wrap">
                   <table>
                     <thead>
@@ -606,7 +678,7 @@ function App() {
                       </tr>
                     </thead>
                     <tbody>
-                      {contracts.map((contract) => {
+                      {filteredContracts.map((contract) => {
                         const report = contract.complianceReport
                         return (
                           <tr
@@ -654,6 +726,14 @@ function App() {
                       })}
                     </tbody>
                   </table>
+                </div>
+              ) : contracts.length ? (
+                <div className="empty">
+                  <strong>No {contractStatusFilter} contracts.</strong>
+                  <span>No contracts in this view match the "{contractStatusFilter}" status filter.</span>
+                  <button type="button" className="outline" style={{ marginTop: '0.75rem' }} onClick={() => setContractStatusFilter('All')}>
+                    Show all contracts ({contracts.length})
+                  </button>
                 </div>
               ) : (
                 <div className="empty">
