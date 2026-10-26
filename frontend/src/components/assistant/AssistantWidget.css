@@ -1,0 +1,436 @@
+/* Contract Assistant Floating Widget Styles */
+
+/* Floating Launcher Button */
+.ciq-assistant-launcher {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  width: 54px;
+  height: 54px;
+  border-radius: var(--ciq-radius-full, 9999px);
+  background: var(--ciq-brand-deep, #3F472C);
+  color: var(--ciq-text-inverse, #FAF7F0);
+  border: 1px solid var(--ciq-brand-border, #A6B08F);
+  box-shadow: 0 4px 16px rgba(33, 35, 22, 0.28), 0 2px 4px rgba(33, 35, 22, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 1000;
+  transition: transform var(--ciq-transition-fast, 150ms ease), background var(--ciq-transition-fast, 150ms ease), box-shadow var(--ciq-transition-fast, 150ms ease);
+}
+
+.ciq-assistant-launcher:hover {
+  background: var(--ciq-brand-hover, #353B25);
+  transform: translateY(-2px) scale(1.04);
+  box-shadow: 0 6px 20px rgba(33, 35, 22, 0.35);
+}
+
+.ciq-assistant-launcher:focus-visible {
+  outline: 2px solid var(--ciq-brand-primary, #545E3B);
+  outline-offset: 3px;
+}
+
+.ciq-assistant-launcher-badge {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 12px;
+  height: 12px;
+  background-color: #A36209;
+  border: 2px solid var(--ciq-canvas, #F4EFE6);
+  border-radius: 50%;
+}
+
+/* Chat Panel Container (Desktop) */
+.ciq-assistant-panel {
+  position: fixed;
+  bottom: 90px;
+  right: 24px;
+  width: 360px;
+  height: 480px;
+  background: var(--ciq-canvas-soft, #F9F6F0);
+  border: 1px solid var(--ciq-border, #DCD5C5);
+  border-radius: var(--ciq-radius-xl, 14px);
+  box-shadow: var(--ciq-shadow-modal, 0 20px 40px rgba(37, 39, 25, 0.22));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  z-index: 1000;
+  animation: ciqAssistantSlideUp 180ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes ciqAssistantSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Panel Header */
+.ciq-assistant-header {
+  padding: 12px 14px;
+  background: var(--ciq-brand-deep, #3F472C);
+  color: var(--ciq-text-inverse, #FAF7F0);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.ciq-assistant-header-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.ciq-assistant-status-dot {
+  width: 7px;
+  height: 7px;
+  background-color: #68D391;
+  border-radius: 50%;
+  display: inline-block;
+  box-shadow: 0 0 6px rgba(104, 211, 145, 0.8);
+}
+
+.ciq-assistant-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.ciq-assistant-icon-btn {
+  background: transparent;
+  border: none;
+  color: var(--ciq-text-inverse, #FAF7F0);
+  padding: 5px;
+  border-radius: var(--ciq-radius-sm, 4px);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.85;
+  transition: opacity 120ms ease, background 120ms ease;
+}
+
+.ciq-assistant-icon-btn:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.ciq-assistant-icon-btn:focus-visible {
+  outline: 2px solid #FAF7F0;
+  outline-offset: 1px;
+}
+
+/* Suggestion Chips Bar */
+.ciq-assistant-chips {
+  padding: 8px 12px;
+  background: var(--ciq-surface-muted, #F8F5EE);
+  border-bottom: 1px solid var(--ciq-border-light, #EBE5D8);
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  white-space: nowrap;
+  scrollbar-width: thin;
+}
+
+.ciq-assistant-chips::-webkit-scrollbar {
+  height: 4px;
+}
+
+.ciq-assistant-chips::-webkit-scrollbar-thumb {
+  background: var(--ciq-border, #DCD5C5);
+  border-radius: 4px;
+}
+
+.ciq-assistant-chip {
+  background: var(--ciq-surface, #FFFFFF);
+  border: 1px solid var(--ciq-brand-border, #A6B08F);
+  color: var(--ciq-brand-deep, #3F472C);
+  font-size: 0.72rem;
+  font-weight: 500;
+  padding: 4px 10px;
+  border-radius: var(--ciq-radius-full, 9999px);
+  cursor: pointer;
+  transition: all var(--ciq-transition-fast, 120ms ease);
+  flex-shrink: 0;
+}
+
+.ciq-assistant-chip:hover {
+  background: var(--ciq-brand-tint, #EEF3E6);
+  border-color: var(--ciq-brand-subtle, #66704A);
+  color: var(--ciq-brand-hover, #353B25);
+}
+
+.ciq-assistant-chip:focus-visible {
+  outline: 2px solid var(--ciq-brand-primary, #545E3B);
+  outline-offset: 1px;
+}
+
+/* Messages Scrollable Area */
+.ciq-assistant-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: var(--ciq-canvas-soft, #F9F6F0);
+}
+
+/* User vs Assistant Message Bubbles */
+.ciq-assistant-msg-row {
+  display: flex;
+  flex-direction: column;
+  max-width: 86%;
+}
+
+.ciq-assistant-msg-user {
+  align-self: flex-end;
+  align-items: flex-end;
+}
+
+.ciq-assistant-msg-bot {
+  align-self: flex-start;
+  align-items: flex-start;
+}
+
+.ciq-assistant-bubble {
+  padding: 9px 13px;
+  font-size: 0.81rem;
+  line-height: 1.45;
+  border-radius: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.ciq-assistant-msg-user .ciq-assistant-bubble {
+  background: var(--ciq-brand-primary, #545E3B);
+  color: var(--ciq-text-inverse, #FAF7F0);
+  border-bottom-right-radius: 2px;
+}
+
+.ciq-assistant-msg-bot .ciq-assistant-bubble {
+  background: var(--ciq-surface, #FFFFFF);
+  color: var(--ciq-text-body, #323523);
+  border: 1px solid var(--ciq-border-light, #EBE5D8);
+  border-bottom-left-radius: 2px;
+  box-shadow: 0 1px 3px rgba(37, 39, 25, 0.05);
+}
+
+.ciq-assistant-caption {
+  font-size: 0.68rem;
+  color: var(--ciq-text-subtle, #8A917B);
+  margin-top: 4px;
+  font-style: italic;
+  padding-left: 2px;
+}
+
+/* Interactive Contract Cards in Assistant Responses */
+.ciq-assistant-contracts-list {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+
+.ciq-assistant-contract-card {
+  background: var(--ciq-canvas, #F4EFE6);
+  border: 1px solid var(--ciq-border, #DCD5C5);
+  border-radius: var(--ciq-radius-md, 6px);
+  padding: 8px 10px;
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  transition: all var(--ciq-transition-fast, 120ms ease);
+  width: 100%;
+}
+
+.ciq-assistant-contract-card:hover {
+  background: var(--ciq-brand-tint, #EEF3E6);
+  border-color: var(--ciq-brand-border, #A6B08F);
+  transform: translateX(2px);
+}
+
+.ciq-assistant-contract-card:focus-visible {
+  outline: 2px solid var(--ciq-brand-primary, #545E3B);
+  outline-offset: 1px;
+}
+
+.ciq-assistant-contract-title {
+  font-size: 0.79rem;
+  font-weight: 600;
+  color: var(--ciq-text-title, #212316);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ciq-assistant-contract-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.7rem;
+  color: var(--ciq-text-muted, #646B55);
+  gap: 6px;
+}
+
+.ciq-assistant-contract-badge {
+  display: inline-block;
+  padding: 1px 6px;
+  font-size: 0.65rem;
+  font-weight: 600;
+  border-radius: 4px;
+  background: #EBE5D8;
+  color: #3F472C;
+}
+
+.ciq-assistant-contract-badge.approved {
+  background: var(--ciq-success-bg, #E8F4E9);
+  color: var(--ciq-success-text, #235B27);
+  border: 1px solid var(--ciq-success-border, #BCDDBE);
+}
+
+.ciq-assistant-contract-badge.critical,
+.ciq-assistant-contract-badge.rejected {
+  background: var(--ciq-danger-bg, #FDF0EE);
+  color: var(--ciq-danger-text, #9E261A);
+  border: 1px solid var(--ciq-danger-border, #F6C4C0);
+}
+
+.ciq-assistant-contract-badge.waiting {
+  background: var(--ciq-warning-bg, #FEF5E7);
+  color: var(--ciq-warning-text, #824E08);
+  border: 1px solid var(--ciq-warning-border, #F5DAB1);
+}
+
+/* Typing Indicator */
+.ciq-assistant-typing {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 12px;
+  background: var(--ciq-surface, #FFFFFF);
+  border: 1px solid var(--ciq-border-light, #EBE5D8);
+  border-radius: 12px;
+  border-bottom-left-radius: 2px;
+  width: fit-content;
+}
+
+.ciq-assistant-typing-dot {
+  width: 6px;
+  height: 6px;
+  background: var(--ciq-brand-subtle, #66704A);
+  border-radius: 50%;
+  animation: ciqAssistantDotPulse 1.2s infinite ease-in-out both;
+}
+
+.ciq-assistant-typing-dot:nth-child(1) { animation-delay: -0.32s; }
+.ciq-assistant-typing-dot:nth-child(2) { animation-delay: -0.16s; }
+.ciq-assistant-typing-dot:nth-child(3) { animation-delay: 0s; }
+
+@keyframes ciqAssistantDotPulse {
+  0%, 80%, 100% {
+    transform: scale(0.6);
+    opacity: 0.4;
+  }
+  40% {
+    transform: scale(1.1);
+    opacity: 1;
+  }
+}
+
+/* Chat Input Bar */
+.ciq-assistant-form {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--ciq-surface, #FFFFFF);
+  border-top: 1px solid var(--ciq-border-light, #EBE5D8);
+}
+
+.ciq-assistant-input {
+  flex: 1;
+  padding: 7px 10px;
+  font-size: 0.81rem;
+  border: 1px solid var(--ciq-border, #DCD5C5);
+  border-radius: var(--ciq-radius-md, 6px);
+  background: var(--ciq-canvas-soft, #F9F6F0);
+  color: var(--ciq-text-body, #323523);
+  font-family: inherit;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+
+.ciq-assistant-input:focus {
+  outline: none;
+  border-color: var(--ciq-brand-primary, #545E3B);
+  background: #FFFFFF;
+}
+
+.ciq-assistant-input:focus-visible {
+  outline: 2px solid var(--ciq-brand-primary, #545E3B);
+  outline-offset: 1px;
+}
+
+.ciq-assistant-send-btn {
+  background: var(--ciq-brand-primary, #545E3B);
+  color: var(--ciq-text-inverse, #FAF7F0);
+  border: none;
+  border-radius: var(--ciq-radius-md, 6px);
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 120ms ease, transform 120ms ease;
+  flex-shrink: 0;
+}
+
+.ciq-assistant-send-btn:hover:not(:disabled) {
+  background: var(--ciq-brand-hover, #353B25);
+  transform: scale(1.04);
+}
+
+.ciq-assistant-send-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.ciq-assistant-send-btn:focus-visible {
+  outline: 2px solid var(--ciq-brand-deep, #3F472C);
+  outline-offset: 1px;
+}
+
+/* Mobile Bottom Sheet Layout */
+@media (max-width: 640px) {
+  .ciq-assistant-panel {
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: 100%;
+    height: 75vh;
+    border-radius: 16px 16px 0 0;
+    border-bottom: none;
+    box-shadow: 0 -8px 24px rgba(37, 39, 25, 0.25);
+  }
+
+  .ciq-assistant-launcher {
+    bottom: 18px;
+    right: 18px;
+    width: 50px;
+    height: 50px;
+  }
+}

@@ -3,6 +3,7 @@ import './App.css'
 import AuditLogs from './pages/AuditLogs'
 import AppShell from './components/layout/AppShell'
 import Dashboard from './pages/Dashboard'
+import AssistantWidget from './components/assistant/AssistantWidget'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000'
 
@@ -27,6 +28,8 @@ function App() {
   const [contractStatusFilter, setContractStatusFilter] = useState('All')
   const [playbookRules, setPlaybookRules] = useState([])
   const [selectedContractId, setSelectedContractId] = useState(null)
+  const [stats, setStats] = useState(null)
+  const [statsError, setStatsError] = useState(null)
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(false)
   const [evaluating, setEvaluating] = useState(false)
@@ -68,6 +71,7 @@ function App() {
   useEffect(() => {
     if (session) {
       loadContracts()
+      loadStats()
       loadPlaybookRules()
       if (session.user.role === 'Admin') loadAgentPolicies()
       loadPendingActions()
@@ -85,6 +89,27 @@ function App() {
   async function loadContracts() {
     const response = await fetch(`${API_URL}/api/contracts`, { headers: { Authorization: `Bearer ${session.token}` } })
     if (response.ok) setContracts(await response.json())
+  }
+
+  async function loadStats() {
+    try {
+      const response = await fetch(`${API_URL}/api/contracts/stats`, {
+        headers: { Authorization: `Bearer ${session.token}` },
+      })
+      if (response.ok) {
+        setStats(await response.json())
+        setStatsError(null)
+      } else if (response.status === 401 || response.status === 403) {
+        setStats(null)
+        setStatsError('403 Forbidden')
+      } else {
+        setStats(null)
+        setStatsError('Failed to load portfolio statistics')
+      }
+    } catch {
+      setStats(null)
+      setStatsError('Network error')
+    }
   }
 
   async function loadPlaybookRules() {
@@ -150,6 +175,7 @@ function App() {
     // rather than patched: a Reviewer's list loses the settled contract and a
     // Viewer picks it up on their next load.
     loadContracts()
+    loadStats()
   }
 
   async function submitAuth(event) {
@@ -193,6 +219,7 @@ function App() {
     // replaces this with the server's authoritative answer.
     setContracts((previous) => [result, ...previous.filter((contract) => contract._id !== result._id)])
     setSelectedContractId(result._id)
+    loadStats()
   }
 
   function resetRuleForm() {
@@ -279,6 +306,7 @@ function App() {
     }
     setMessage('Risk compliance evaluation complete.')
     loadContracts()
+    loadStats()
     loadPendingActions()
   }
 
@@ -952,6 +980,19 @@ function App() {
           )}
         </>
       )}
+      <AssistantWidget
+        contracts={contracts}
+        stats={stats}
+        statsError={statsError}
+        session={session}
+        onSelectContract={selectContract}
+        onNavigate={(tab, statusFilter) => {
+          if (statusFilter !== undefined) {
+            setContractStatusFilter(statusFilter)
+          }
+          setActiveTab(tab)
+        }}
+      />
     </AppShell>
   )
 }
